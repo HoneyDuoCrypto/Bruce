@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 HDW Task CLI - Honey Duo Wealth Task Management CLI
-Enhanced with multi-phase support and better organization
+Enhanced with multi-phase support and enhanced context generation
+Save as: cli/hdw-task.py
 """
 
 import argparse
@@ -28,9 +29,11 @@ def main():
     status_parser = subparsers.add_parser("status", help="Show task status")
     status_parser.add_argument("task_id", nargs="?", help="Specific task ID")
     
-    # Start command
+    # Start command - UPDATED with --basic flag
     start_parser = subparsers.add_parser("start", help="Start a task")
     start_parser.add_argument("task_id", help="Task ID to start")
+    start_parser.add_argument("--basic", action="store_true", 
+                            help="Use basic context instead of enhanced (default: enhanced)")
     
     # Commit command
     commit_parser = subparsers.add_parser("commit", help="Commit completed task")
@@ -42,7 +45,7 @@ def main():
     block_parser.add_argument("task_id", help="Task ID to block")
     block_parser.add_argument("reason", help="Reason for blocking")
     
-    # Phase command (new!)
+    # Phase command
     phase_parser = subparsers.add_parser("phases", help="Show phase progress")
     
     args = parser.parse_args()
@@ -60,7 +63,8 @@ def main():
     elif args.command == "status":
         cmd_status_enhanced(task_manager, args.task_id)
     elif args.command == "start":
-        task_manager.cmd_start(args.task_id)
+        # UPDATED to use enhanced context by default
+        task_manager.cmd_start(args.task_id, enhanced=not args.basic)
     elif args.command == "commit":
         cmd_commit_enhanced(task_manager, args.task_id, args.message)
     elif args.command == "block":
@@ -168,10 +172,10 @@ def cmd_status_enhanced(tm: TaskManager, task_id=None):
                 bar = "█" * filled + "░" * (bar_length - filled)
                 
                 print(f"Phase {phase_id}: {progress['name']}")
-                print(f"  [{bar}] {progress['percentage']}% ({progress['completed']}/{progress['total']})")
+                print(f"  [{bar}] {progress['percentage']:.0f}% ({progress['completed']}/{progress['total']})")
 
 def cmd_commit_enhanced(tm: TaskManager, task_id: str, message=None):
-    """Enhanced commit with proper task updates"""
+    """Enhanced commit with proper task updates and blueprint generation"""
     import subprocess
     from datetime import datetime
     
@@ -227,10 +231,10 @@ def cmd_commit_enhanced(tm: TaskManager, task_id: str, message=None):
     # Generate report
     generate_claude_report(task, "Completed", commit_message)
     
-    # Auto-generate blueprint documentation
+    # Auto-generate blueprint documentation - UPDATED import
     try:
-        from src.blueprint_generator import BlueprintGenerator
-        generator = BlueprintGenerator(tm.project_root)
+        from src.blueprint_generator import PhaseBlueprintGenerator
+        generator = PhaseBlueprintGenerator(tm.project_root)
         blueprint_results = generator.auto_generate_on_completion(task_id)
         
         if blueprint_results and "error" not in blueprint_results:
@@ -298,14 +302,14 @@ def cmd_phases(tm: TaskManager):
         if phase_info.get("description"):
             print(f"   {phase_info['description']}")
         
-        print(f"\n   Progress: [{bar}] {progress['percentage']}%")
+        print(f"\n   Progress: [{bar}] {progress['percentage']:.0f}%")
         print(f"   Tasks: {progress['completed']} completed, {progress['in_progress']} in progress, {progress['pending']} pending")
         
         if progress["blocked"] > 0:
             print(f"   ⚠️  Blocked: {progress['blocked']} tasks")
 
 def generate_claude_report(task, status, summary):
-    """Generate a report for Claude (replacing ChatGPT report)"""
+    """Generate a report for Claude handoff"""
     print("\n" + "="*50)
     print("📋 STATUS REPORT FOR CLAUDE HANDOFF")
     print("="*50)

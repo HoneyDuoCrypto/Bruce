@@ -57,13 +57,11 @@ tasks:
   - cli/hdw-task.py#generate_chatgpt_report
   output: src/session_handoff.py
   tests: tests/test_session_handoff.py
-  status: completed
-  updated: '2025-06-10T02:23:56.409741'
+  status: blocked
+  updated: '2025-06-10T03:16:49.735070'
   notes:
-  - timestamp: '2025-06-10T02:23:56.348490'
-    note: Task started
-  - timestamp: '2025-06-10T02:23:56.409745'
-    note: 'Task committed: Complete task: pm-session-handoff'
+  - timestamp: '2025-06-10T03:16:49.735074'
+    note: 'Blocked: This has already been completed but in a different way '
 - id: pm-web-phases
   description: Update web UI to show phase-based progress
   context:
@@ -89,11 +87,22 @@ tasks:
   - cli/hdw-task.py#cmd_commit
   output: Enhanced completion with decision capture
   tests: tests/test_decision_tracking.py
-  status: pending
+  status: in-progress
+  updated: '2025-06-10T03:17:06.822268'
+  notes:
+  - timestamp: '2025-06-10T03:17:06.822272'
+    note: Task started
 - id: pm-context-enhance
   description: Include related tasks and decisions in context
   context:
   - cli/hdw-task.py#get_context
   output: Enhanced context generator
   tests: tests/test_context_enhance.py
-  status: pending
+  status: completed
+  updated: '2025-06-10T04:20:26.547430'
+  notes:
+  - timestamp: '2025-06-10T04:15:01.324891'
+    note: Task started
+  - timestamp: '2025-06-10T04:20:26.547434'
+    note: 'Task committed: Implemented enhanced context generator with related tasks,
+      architecture diagrams, and decision history'

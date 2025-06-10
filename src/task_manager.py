@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced Task Manager with Multi-Phase Support
+Enhanced Task Manager with Multi-Phase Support and Enhanced Context
 Save as: src/task_manager.py
 """
 
@@ -8,9 +8,10 @@ import yaml
 import json
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set, Tuple
 from datetime import datetime
 import shutil
+import re
 
 class TaskManager:
     def __init__(self, project_root: Optional[Path] = None):
@@ -190,8 +191,270 @@ class TaskManager:
         
         return "\n".join(context_content)
     
-    def cmd_start(self, task_id: str):
-        """Start working on a task - enhanced version"""
+    def find_related_tasks(self, task_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Find tasks related to the given task"""
+        tasks_data = self.load_tasks()
+        current_task = None
+        
+        # Find current task
+        for task in tasks_data.get("tasks", []):
+            if task["id"] == task_id:
+                current_task = task
+                break
+        
+        if not current_task:
+            return []
+        
+        # Score other tasks for relevance
+        related_tasks = []
+        
+        for task in tasks_data.get("tasks", []):
+            if task["id"] == task_id or task.get("status") != "completed":
+                continue
+            
+            score = 0
+            
+            # Same phase = high relevance
+            if task.get("phase") == current_task.get("phase"):
+                score += 10
+            
+            # Check for keyword matches in description
+            current_keywords = set(re.findall(r'\w+', current_task.get("description", "").lower()))
+            task_keywords = set(re.findall(r'\w+', task.get("description", "").lower()))
+            
+            # Remove common words
+            common_words = {"the", "a", "an", "and", "or", "for", "to", "in", "of", "with", "from"}
+            current_keywords -= common_words
+            task_keywords -= common_words
+            
+            # Score based on keyword overlap
+            if current_keywords and task_keywords:
+                overlap = len(current_keywords & task_keywords)
+                score += overlap * 2
+            
+            # Check if current task depends on this one
+            if current_task.get("depends_on") and task_id in current_task.get("depends_on", []):
+                score += 15
+            
+            # Check if they share dependencies
+            if current_task.get("depends_on") and task.get("depends_on"):
+                shared_deps = set(current_task["depends_on"]) & set(task["depends_on"])
+                score += len(shared_deps) * 3
+            
+            if score > 0:
+                related_tasks.append({
+                    "task": task,
+                    "score": score
+                })
+        
+        # Sort by score and return top N
+        related_tasks.sort(key=lambda x: x["score"], reverse=True)
+        return [rt["task"] for rt in related_tasks[:limit]]
+    
+    def extract_decisions_from_task(self, task_id: str) -> List[str]:
+        """Extract decisions from a task's context file"""
+        decisions = []
+        
+        # Find context file
+        tasks_data = self.load_tasks()
+        task = next((t for t in tasks_data.get("tasks", []) if t["id"] == task_id), None)
+        
+        if not task:
+            return decisions
+        
+        # Check phase-specific context
+        phase = task.get("phase", 0)
+        context_file = self.contexts_dir / f"phase{phase}" / f"context_{task_id}.md"
+        
+        # Fallback to legacy location
+        if not context_file.exists():
+            context_file = self.project_root / f".task_context_{task_id}.md"
+        
+        if not context_file.exists():
+            return decisions
+        
+        # Read and extract decisions
+        try:
+            with open(context_file, 'r') as f:
+                content = f.read()
+            
+            lines = content.split('\n')
+            for line in lines:
+                line = line.strip()
+                # Look for decision indicators
+                if any(keyword in line.lower() for keyword in 
+                       ['decision:', 'decided to', 'chose', 'approach:', 'strategy:', 
+                        'because', 'rationale:', 'reason:']):
+                    # Clean up the line
+                    line = re.sub(r'^[-*#]+\s*', '', line)  # Remove bullet points
+                    if line and len(line) > 10:  # Meaningful content
+                        decisions.append(line)
+        
+        except Exception as e:
+            print(f"Error extracting decisions from {task_id}: {e}")
+        
+        return decisions
+    
+    def generate_architecture_context(self, task_id: str) -> str:
+        """Generate architecture diagram showing where task fits"""
+        tasks_data = self.load_tasks()
+        task = next((t for t in tasks_data.get("tasks", []) if t["id"] == task_id), None)
+        
+        if not task:
+            return ""
+        
+        # Determine which component this task affects
+        task_desc = task.get("description", "").lower()
+        task_output = task.get("output", "").lower()
+        task_id_lower = task_id.lower()
+        
+        # More specific component detection - order matters!
+        component = "Unknown Component"
+        combined_text = task_desc + " " + task_output + " " + task_id_lower
+        
+        # Check most specific patterns first
+        if "context" in combined_text and "enhance" in combined_text:
+            component = "Context System"
+        elif any(term in combined_text for term in ["blueprint", "generator"]) and "context" not in combined_text:
+            component = "Blueprint Generator"
+        elif any(term in combined_text for term in ["cli", "command", "hdw-task"]):
+            component = "CLI Interface"
+        elif any(term in combined_text for term in ["web", "ui", "dashboard", "hdw_complete"]):
+            component = "Web Dashboard"
+        elif any(term in combined_text for term in ["taskmanager", "task manager", "task_manager"]):
+            component = "TaskManager Core"
+        
+        # Generate simple ASCII diagram
+        diagram = f"""
+## Architecture Context: Where This Task Fits
+
+Current Task: {task_id}
+Component: {component}
+
+System Overview:
+┌─────────────────────┐     ┌─────────────────────┐
+│   CLI Interface     │     │   Web Dashboard     │
+│  (hdw-task.py)     │     │  (hdw_complete.py)  │
+└──────────┬──────────┘     └──────────┬──────────┘
+           │                           │
+           └─────────┬─────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   TaskManager Core    │{' ← YOU ARE HERE' if component == 'TaskManager Core' else ''}
+         │  (task_manager.py)    │
+         └───────────┬───────────┘
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+        ▼                         ▼
+┌─────────────────┐     ┌─────────────────┐
+│ Context System  │{' ← YOU ARE HERE' if component == 'Context System' else ''}     │ Blueprint Gen   │{' ← YOU ARE HERE' if component == 'Blueprint Generator' else ''}
+│ (contexts/)     │     │ (blueprints/)   │
+└─────────────────┘     └─────────────────┘
+
+Data Flow:
+1. User triggers task via CLI/Web
+2. TaskManager processes request
+3. Context System generates/reads context
+4. Work happens (YOU!)
+5. Blueprint Generator creates documentation
+"""
+        
+        # Add component-specific notes
+        if component == "CLI Interface":
+            diagram = diagram.replace("│   CLI Interface     │", "│   CLI Interface     │ ← YOU ARE HERE")
+        elif component == "Web Dashboard":
+            diagram = diagram.replace("│   Web Dashboard     │", "│   Web Dashboard     │ ← YOU ARE HERE")
+        
+        return diagram
+    
+    def generate_enhanced_context(self, task_id: str) -> str:
+        """Generate enhanced context with related tasks, architecture, and decisions"""
+        tasks_data = self.load_tasks()
+        task = next((t for t in tasks_data.get("tasks", []) if t["id"] == task_id), None)
+        
+        if not task:
+            return f"Task {task_id} not found"
+        
+        # Build enhanced context
+        context_parts = []
+        
+        # 1. Basic task information
+        context_parts.append(f"# Context for Task: {task_id}\n")
+        context_parts.append(f"**Phase:** {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}")
+        context_parts.append(f"**Description:** {task['description']}")
+        context_parts.append(f"**Expected Output:** {task.get('output', 'Not specified')}\n")
+        
+        if task.get('acceptance_criteria'):
+            context_parts.append("**Acceptance Criteria:**")
+            for criteria in task['acceptance_criteria']:
+                context_parts.append(f"- {criteria}")
+            context_parts.append("")
+        
+        if task.get('depends_on'):
+            context_parts.append(f"**Dependencies:** {', '.join(task['depends_on'])}\n")
+        
+        # 2. Architecture context
+        arch_context = self.generate_architecture_context(task_id)
+        if arch_context:
+            context_parts.append(arch_context)
+        
+        # 3. Related completed tasks
+        related_tasks = self.find_related_tasks(task_id)
+        if related_tasks:
+            context_parts.append("## Related Completed Tasks\n")
+            context_parts.append("These completed tasks might provide useful context:\n")
+            
+            for related_task in related_tasks:
+                context_parts.append(f"### {related_task['id']}: {related_task['description']}")
+                context_parts.append(f"- **Output:** {related_task.get('output', 'Not specified')}")
+                context_parts.append(f"- **Status:** {related_task.get('status', 'unknown')}")
+                
+                # Include key decisions from related task
+                decisions = self.extract_decisions_from_task(related_task['id'])
+                if decisions:
+                    context_parts.append("- **Key Decisions:**")
+                    for decision in decisions[:2]:  # Limit to 2 most relevant
+                        context_parts.append(f"  - {decision}")
+                
+                context_parts.append("")
+        
+        # 4. Decision history from phase
+        context_parts.append("## Decision History\n")
+        context_parts.append("Key decisions from this phase that may impact your work:\n")
+        
+        phase_tasks = [t for t in tasks_data.get("tasks", []) 
+                      if t.get("phase") == task.get("phase") and 
+                      t.get("status") == "completed"]
+        
+        all_decisions = []
+        for phase_task in phase_tasks:
+            decisions = self.extract_decisions_from_task(phase_task["id"])
+            for decision in decisions:
+                all_decisions.append(f"- **{phase_task['id']}:** {decision}")
+        
+        if all_decisions:
+            # Show up to 5 most relevant decisions
+            for decision in all_decisions[:5]:
+                context_parts.append(decision)
+        else:
+            context_parts.append("- No previous decisions found in this phase")
+        
+        context_parts.append("")
+        
+        # 5. Original context files
+        context_parts.append("## Context Documentation:\n")
+        if task.get("context"):
+            context = self.get_context(task["context"])
+            context_parts.append(context)
+        else:
+            context_parts.append("No additional context files specified.\n")
+        
+        return "\n".join(context_parts)
+    
+    def cmd_start(self, task_id: str, enhanced: bool = True):
+        """Start working on a task - with optional enhanced context"""
         tasks_data = self.load_tasks()
         task = None
         
@@ -225,28 +488,37 @@ class TaskManager:
         
         context_file = phase_dir / f"context_{task_id}.md"
         
-        with open(context_file, 'w') as f:
-            f.write(f"# Context for Task: {task_id}\n\n")
-            f.write(f"**Phase:** {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}\n")
-            f.write(f"**Description:** {task['description']}\n\n")
-            f.write(f"**Expected Output:** {task.get('output', 'Not specified')}\n\n")
+        # Generate context (enhanced or basic)
+        if enhanced:
+            print("✨ Generating enhanced context with related tasks and architecture...")
+            context_content = self.generate_enhanced_context(task_id)
+        else:
+            # Original basic context
+            context_content = f"# Context for Task: {task_id}\n\n"
+            context_content += f"**Phase:** {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}\n"
+            context_content += f"**Description:** {task['description']}\n\n"
+            context_content += f"**Expected Output:** {task.get('output', 'Not specified')}\n\n"
             
             if task.get('acceptance_criteria'):
-                f.write("**Acceptance Criteria:**\n")
+                context_content += "**Acceptance Criteria:**\n"
                 for criteria in task['acceptance_criteria']:
-                    f.write(f"- {criteria}\n")
-                f.write("\n")
+                    context_content += f"- {criteria}\n"
+                context_content += "\n"
             
             if task.get('depends_on'):
-                f.write(f"**Dependencies:** {', '.join(task['depends_on'])}\n\n")
+                context_content += f"**Dependencies:** {', '.join(task['depends_on'])}\n\n"
             
-            f.write("## Context Documentation:\n\n")
+            context_content += "## Context Documentation:\n\n"
             
             if task.get("context"):
                 context = self.get_context(task["context"])
-                f.write(context)
+                context_content += context
             else:
-                f.write("No context files specified.\n")
+                context_content += "No context files specified.\n"
+        
+        # Save context file
+        with open(context_file, 'w') as f:
+            f.write(context_content)
         
         print(f"✓ Context saved to: {context_file}")
         print(f"\n💡 Ready for implementation!")
@@ -289,9 +561,7 @@ class TaskManager:
         # Calculate percentages
         for phase_id, progress in phase_progress.items():
             if progress["total"] > 0:
-                progress["percentage"] = int(
-                    (progress["completed"] / progress["total"]) * 100
-                )
+                progress["percentage"] = (progress["completed"] / progress["total"]) * 100
             else:
                 progress["percentage"] = 0
         

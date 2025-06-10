@@ -1,36 +1,238 @@
 #!/usr/bin/env python3
 """
-Blueprint Generator for Honey Duo Wealth Project Management System
-
-Auto-generates comprehensive blueprint documentation from completed tasks.
-Integrates with existing TaskManager and works alongside current report system.
+Phase Blueprint Generator - One Source of Truth Per Phase
+Creates comprehensive phase documents containing tasks, architecture, handoffs, and technical details
 """
 
 import os
 import sys
 import re
+import ast
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set, Tuple
+import glob
 
 # Add src to path to import TaskManager
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.task_manager import TaskManager
 
-class BlueprintGenerator:
-    """Generates blueprint documentation from completed tasks and project data."""
+class SystemArchitectureAnalyzer:
+    """Analyzes actual code to map system connections and dependencies."""
+    
+    def __init__(self, project_root: Path):
+        self.project_root = project_root
+        self.python_files = []
+        self.imports_map = {}
+        self.api_endpoints = {}
+        self.file_dependencies = {}
+        self.data_flows = {}
+        
+    def analyze_project(self) -> Dict[str, Any]:
+        """Perform complete system analysis."""
+        self._find_python_files()
+        self._analyze_imports()
+        self._analyze_api_endpoints()
+        self._analyze_file_dependencies()
+        self._analyze_data_flows()
+        
+        return {
+            'files': self.python_files,
+            'imports': self.imports_map,
+            'api_endpoints': self.api_endpoints,
+            'dependencies': self.file_dependencies,
+            'data_flows': self.data_flows
+        }
+    
+    def _find_python_files(self):
+        """Find all Python files in the project."""
+        patterns = ['*.py', 'cli/*.py', 'src/*.py', 'tests/*.py']
+        for pattern in patterns:
+            for file_path in self.project_root.glob(pattern):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(self.project_root)
+                    self.python_files.append(str(rel_path))
+    
+    def _analyze_imports(self):
+        """Analyze import relationships between files."""
+        for file_path in self.python_files:
+            full_path = self.project_root / file_path
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                imports = []
+                # Find import statements
+                import_lines = re.findall(r'^(?:from\s+[\w.]+\s+)?import\s+[\w.,\s*]+', content, re.MULTILINE)
+                for line in import_lines:
+                    imports.append(line.strip())
+                
+                # Find local imports (from src, from cli, etc.)
+                local_imports = []
+                for imp in imports:
+                    if any(local in imp for local in ['src.', 'cli.', 'from src', 'from cli']):
+                        local_imports.append(imp)
+                
+                self.imports_map[file_path] = {
+                    'all_imports': imports,
+                    'local_imports': local_imports
+                }
+                
+            except Exception as e:
+                self.imports_map[file_path] = {'error': str(e)}
+    
+    def _analyze_api_endpoints(self):
+        """Find Flask/API endpoints and their relationships."""
+        for file_path in self.python_files:
+            full_path = self.project_root / file_path
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Find Flask routes
+                routes = re.findall(r"@app\.route\(['\"]([^'\"]+)['\"](?:,\s*methods=\[([^\]]+)\])?\)", content)
+                if routes:
+                    self.api_endpoints[file_path] = []
+                    for route, methods in routes:
+                        methods_list = [m.strip().strip('\'"') for m in methods.split(',')] if methods else ['GET']
+                        self.api_endpoints[file_path].append({
+                            'route': route,
+                            'methods': methods_list
+                        })
+                
+            except Exception as e:
+                pass
+    
+    def _analyze_file_dependencies(self):
+        """Analyze which files depend on which others."""
+        for file_path in self.python_files:
+            full_path = self.project_root / file_path
+            dependencies = {
+                'reads_files': [],
+                'writes_files': [],
+                'config_files': []
+            }
+            
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Find file operations
+                file_ops = re.findall(r'(?:open|Path|load|save|read|write)\([\'"]([^\'"]+)[\'"]', content)
+                for file_op in file_ops:
+                    if any(ext in file_op for ext in ['.yaml', '.yml', '.json', '.md', '.txt']):
+                        if 'w' in content[content.find(file_op):content.find(file_op)+50]:
+                            dependencies['writes_files'].append(file_op)
+                        else:
+                            dependencies['reads_files'].append(file_op)
+                
+                # Find config files
+                config_patterns = ['.yaml', '.yml', '.json', '.env']
+                for pattern in config_patterns:
+                    matches = re.findall(rf'[\'"]([^\'\"]*{pattern})[\'"]', content)
+                    dependencies['config_files'].extend(matches)
+                
+                self.file_dependencies[file_path] = dependencies
+                
+            except Exception as e:
+                self.file_dependencies[file_path] = {'error': str(e)}
+    
+    def _analyze_data_flows(self):
+        """Analyze how data flows through the system."""
+        flow_patterns = {
+            'YAML → TaskManager': [],
+            'TaskManager → Context Files': [],
+            'CLI → TaskManager': [],
+            'Web UI → TaskManager': [],
+            'TaskManager → Git': [],
+            'Context → Blueprint': []
+        }
+        
+        for file_path in self.python_files:
+            full_path = self.project_root / file_path
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Identify data flow patterns
+                if 'TaskManager' in content and any(ext in content for ext in ['.yaml', '.yml']):
+                    flow_patterns['YAML → TaskManager'].append(file_path)
+                
+                if 'context' in content.lower() and 'taskmanager' in content.lower():
+                    flow_patterns['TaskManager → Context Files'].append(file_path)
+                
+                if 'TaskManager' in content and 'argparse' in content:
+                    flow_patterns['CLI → TaskManager'].append(file_path)
+                
+                if 'TaskManager' in content and 'Flask' in content:
+                    flow_patterns['Web UI → TaskManager'].append(file_path)
+                
+                if 'git' in content.lower() and 'commit' in content.lower():
+                    flow_patterns['TaskManager → Git'].append(file_path)
+                
+                if 'blueprint' in content.lower() and 'context' in content.lower():
+                    flow_patterns['Context → Blueprint'].append(file_path)
+                    
+            except Exception:
+                continue
+        
+        self.data_flows = flow_patterns
+
+class PhaseDocumentManager:
+    """Manages phase documents - one comprehensive document per phase."""
+    
+    def __init__(self, docs_dir: Path):
+        self.docs_dir = docs_dir
+        self.blueprints_dir = docs_dir / "blueprints"
+        self.blueprints_dir.mkdir(parents=True, exist_ok=True)
+    
+    def get_phase_document_path(self, phase_id: int) -> Path:
+        """Get the path for a phase document."""
+        return self.blueprints_dir / f"phase_{phase_id}_blueprint.md"
+    
+    def backup_completed_phase(self, phase_id: int) -> Optional[str]:
+        """Backup a completed phase document."""
+        current_doc = self.get_phase_document_path(phase_id)
+        if not current_doc.exists():
+            return None
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        backup_name = f"phase_{phase_id}_completed_{timestamp}.md"
+        backup_path = self.blueprints_dir / backup_name
+        
+        try:
+            # Copy current to completed backup
+            with open(current_doc, 'r') as src, open(backup_path, 'w') as dst:
+                content = src.read()
+                # Add completion header
+                completion_header = f"""# ✅ PHASE {phase_id} COMPLETED
+
+**Completion Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+**Status:** All tasks completed successfully
+**This is the final archived version of Phase {phase_id}**
+
+---
+
+"""
+                dst.write(completion_header + content)
+            
+            print(f"📦 Phase {phase_id} completed and archived: {backup_name}")
+            return str(backup_path)
+            
+        except Exception as e:
+            print(f"⚠️  Couldn't backup phase {phase_id}: {e}")
+            return None
+
+class PhaseBlueprintGenerator:
+    """Generates comprehensive phase blueprints - one source of truth per phase."""
     
     def __init__(self, project_root: str = "."):
         self.project_root = Path(project_root)
         self.task_manager = TaskManager(self.project_root)
+        self.analyzer = SystemArchitectureAnalyzer(self.project_root)
         self.docs_path = self.project_root / "docs"
-        self.blueprints_path = self.docs_path / "blueprints"
-        self.sessions_path = self.docs_path / "sessions"
+        self.doc_manager = PhaseDocumentManager(self.docs_path)
         
-        # Ensure directories exist
-        self.blueprints_path.mkdir(parents=True, exist_ok=True)
-        self.sessions_path.mkdir(parents=True, exist_ok=True)
-    
     def get_task_context_content(self, task_id: str, phase: int = None) -> Optional[Dict[str, Any]]:
         """Get context file content for a specific task."""
         # Look in phase-specific context directory first
@@ -62,10 +264,6 @@ class BlueprintGenerator:
                 'context_file': str(context_file),
                 'raw_content': content,
                 'last_modified': datetime.fromtimestamp(context_file.stat().st_mtime).isoformat(),
-                'phase_info': self._extract_phase_info(content),
-                'description': self._extract_description(content),
-                'expected_output': self._extract_expected_output(content),
-                'context_docs': self._extract_context_docs(content),
                 'implementation_notes': self._extract_implementation_notes(content),
                 'decisions': self._extract_decisions(content)
             }
@@ -76,185 +274,85 @@ class BlueprintGenerator:
             print(f"Error reading context file {context_file}: {e}")
             return None
     
-    def _extract_phase_info(self, content: str) -> str:
-        """Extract phase information from context content."""
-        match = re.search(r'\*\*Phase:\*\* (.+)', content)
-        return match.group(1) if match else "Unknown"
-    
-    def _extract_description(self, content: str) -> str:
-        """Extract task description from context content."""
-        match = re.search(r'\*\*Description:\*\* (.+)', content)
-        return match.group(1) if match else "No description"
-    
-    def _extract_expected_output(self, content: str) -> str:
-        """Extract expected output from context content."""
-        match = re.search(r'\*\*Expected Output:\*\* (.+)', content)
-        return match.group(1) if match else "Not specified"
-    
-    def _extract_context_docs(self, content: str) -> List[str]:
-        """Extract referenced documentation files from context."""
-        docs = []
-        # Look for === filename === patterns
-        matches = re.findall(r'=== (.+?) ===', content)
-        return matches
-    
     def _extract_implementation_notes(self, content: str) -> List[str]:
         """Extract implementation details from task notes."""
         notes = []
-        
-        # Look for implementation-related keywords in the content
         lines = content.split('\n')
         for line in lines:
             line = line.strip()
             if any(keyword in line.lower() for keyword in 
                    ['implemented', 'created', 'added', 'modified', 'enhanced', 'built', 'fixed']):
                 notes.append(line)
-        
         return notes
     
     def _extract_decisions(self, content: str) -> List[str]:
         """Extract decision points from context content."""
         decisions = []
         lines = content.split('\n')
-        
-        # Look for decision-related patterns
         for line in lines:
             line = line.strip()
             if any(keyword in line.lower() for keyword in 
                    ['decision', 'chose', 'approach', 'strategy', 'because', 'rationale']):
                 decisions.append(line)
-        
         return decisions
     
-    def generate_task_blueprint(self, task_id: str, task_info: Dict[str, Any] = None) -> str:
-        """Generate comprehensive blueprint documentation for a single task."""
-        
-        # Get task info from TaskManager if not provided
-        if not task_info:
-            tasks_data = self.task_manager.load_tasks()
-            task_info = next((t for t in tasks_data.get("tasks", []) if t["id"] == task_id), None)
-            if not task_info:
-                return f"Task {task_id} not found."
-        
-        # Get context data
-        context_data = self.get_task_context_content(task_id, task_info.get('phase'))
-        
-        # Build the blueprint
-        blueprint = f"""## Task: {task_id}
-
-**Status:** {task_info.get('status', 'Unknown')} 
-**Phase:** {task_info.get('phase', 0)} - {task_info.get('phase_name', 'Legacy')}
-**Description:** {task_info.get('description', 'No description available')}
-**Expected Output:** {task_info.get('output', 'Not specified')}
-"""
-        
-        # Add completion information
-        if task_info.get('updated'):
-            blueprint += f"**Last Updated:** {task_info['updated']}\n"
-        
-        if task_info.get('status') == 'completed':
-            blueprint += f"**✅ Completion Status:** Task successfully completed\n"
-        elif task_info.get('status') == 'blocked':
-            # Extract block reason from notes
-            if task_info.get('notes'):
-                for note in reversed(task_info['notes']):
-                    if 'Blocked:' in note.get('note', ''):
-                        blueprint += f"**🚫 Blocked Reason:** {note['note']}\n"
-                        break
-        
-        # Add acceptance criteria if available
-        if task_info.get('acceptance_criteria'):
-            blueprint += f"\n### Acceptance Criteria\n"
-            for criteria in task_info['acceptance_criteria']:
-                blueprint += f"- {criteria}\n"
-        
-        # Add context information if available
-        if context_data:
-            blueprint += f"\n### Implementation Context\n"
-            blueprint += f"**Context File:** {context_data['context_file']}\n"
-            
-            if context_data['context_docs']:
-                blueprint += f"\n**Referenced Files:**\n"
-                for doc in context_data['context_docs']:
-                    blueprint += f"- {doc}\n"
-            
-            if context_data['implementation_notes']:
-                blueprint += f"\n**Implementation Notes:**\n"
-                for note in context_data['implementation_notes']:
-                    blueprint += f"- {note}\n"
-            
-            if context_data['decisions']:
-                blueprint += f"\n**Key Decisions:**\n"
-                for decision in context_data['decisions']:
-                    blueprint += f"- {decision}\n"
-        
-        # Add task notes/history
-        if task_info.get('notes'):
-            blueprint += f"\n### Task History\n"
-            for note in task_info['notes']:
-                timestamp = note.get('timestamp', 'Unknown time')
-                note_text = note.get('note', '')
-                blueprint += f"- **{timestamp[:19]}:** {note_text}\n"
-        
-        blueprint += "\n---\n\n"
-        return blueprint
-    
-    def generate_phase_blueprint(self, phase_name: str = None, phase_id: int = None) -> str:
-        """Generate complete blueprint for a phase."""
-        tasks_data = self.task_manager.load_tasks()
-        phase_progress = self.task_manager.get_phase_progress()
-        
-        # Determine which phase to generate
-        if phase_id is not None:
-            target_phase = phase_id
-        elif phase_name:
-            # Try to find phase by name
-            target_phase = None
-            for pid, pinfo in tasks_data.get("phases", {}).items():
-                if phase_name.lower() in pinfo["name"].lower():
-                    target_phase = pid
-                    break
-        else:
-            # Default to latest phase with activity
-            target_phase = max(phase_progress.keys()) if phase_progress else 1
-        
-        if target_phase not in phase_progress:
-            return f"Phase {target_phase} not found."
-        
-        progress = phase_progress[target_phase]
-        phase_info = tasks_data.get("phases", {}).get(str(target_phase), {})
-        
+    def generate_comprehensive_phase_blueprint(self, phase_id: int) -> str:
+        """Generate the ONE comprehensive blueprint for a phase."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        blueprint = f"""# Phase {target_phase}: {progress['name']} Blueprint
+        # Get all data needed
+        tasks_data = self.task_manager.load_tasks()
+        phase_progress = self.task_manager.get_phase_progress()
+        architecture = self.analyzer.analyze_project()
+        
+        if phase_id not in phase_progress:
+            return f"Phase {phase_id} not found."
+        
+        progress = phase_progress[phase_id]
+        phase_info = tasks_data.get("phases", {}).get(str(phase_id), {})
+        
+        # Determine phase status
+        if progress['percentage'] == 100:
+            status_badge = "✅ COMPLETE"
+            status_color = "🟢"
+        elif progress['completed'] > 0:
+            status_badge = "🔄 IN PROGRESS"
+            status_color = "🟡"
+        else:
+            status_badge = "⏳ NOT STARTED"
+            status_color = "⚪"
+        
+        blueprint = f"""# 📋 Phase {phase_id}: {progress['name']} Blueprint
 
-**Generated:** {timestamp}
-**Completion Status:** {progress['completed']}/{progress['total']} tasks completed ({progress['percentage']:.1f}%)
+**Status:** {status_badge}
+**Progress:** {progress['completed']}/{progress['total']} tasks ({progress['percentage']:.1f}%)
+**Last Updated:** {timestamp}
+**Source of Truth:** This document contains ALL information for Phase {phase_id}
 
-## Phase Overview
+---
 
-{phase_info.get('description', 'No description available')}
+## 🎯 Phase Overview
 
-### Progress Summary
+{phase_info.get('description', 'Complete PM system for seamless Claude handoffs')}
 
-- **Total Tasks:** {progress['total']}
-- **✅ Completed:** {progress['completed']}  
+### 📊 Progress Summary
+- **{status_color} Total Tasks:** {progress['total']}
+- **✅ Completed:** {progress['completed']} 
 - **🔄 In Progress:** {progress['in_progress']}
 - **⏳ Pending:** {progress['pending']}
 - **🚫 Blocked:** {progress['blocked']}
-- **Overall Progress:** {progress['percentage']:.1f}%
 
-### Phase Progress Visualization
+### Progress Visualization
 """
         
-        # Add a text-based progress bar
+        # Add progress bar
         bar_length = 50
         filled = int(bar_length * progress['percentage'] / 100)
         bar = "█" * filled + "░" * (bar_length - filled)
         blueprint += f"`[{bar}] {progress['percentage']:.1f}%`\n\n"
         
         # Get all tasks for this phase
-        phase_tasks = [t for t in tasks_data.get("tasks", []) if t.get("phase", 0) == target_phase]
+        phase_tasks = [t for t in tasks_data.get("tasks", []) if t.get("phase", 0) == phase_id]
         
         # Group tasks by status
         tasks_by_status = {
@@ -269,9 +367,13 @@ class BlueprintGenerator:
             if status in tasks_by_status:
                 tasks_by_status[status].append(task)
         
-        # Add detailed task information
-        blueprint += "## Task Details\n\n"
+        blueprint += """---
+
+## 📋 Task Implementation Details
+
+"""
         
+        # Add detailed task information
         status_order = ['completed', 'in-progress', 'pending', 'blocked']
         status_emojis = {
             'completed': '✅',
@@ -284,342 +386,522 @@ class BlueprintGenerator:
             if tasks_by_status[status]:
                 blueprint += f"### {status_emojis[status]} {status.replace('-', ' ').title()} Tasks\n\n"
                 for task in tasks_by_status[status]:
-                    blueprint += self.generate_task_blueprint(task['id'], task)
+                    blueprint += self._generate_detailed_task_section(task)
         
-        # Add phase completion summary if complete
+        blueprint += """---
+
+## 🏗️ System Architecture
+
+### Component Overview
+```
+📁 HONEY DUO WEALTH - PHASE """ + str(phase_id) + """ ARCHITECTURE
+│
+├── 🧠 CORE ENGINE
+│   ├── TaskManager (src/task_manager.py)
+│   │   ├── → reads: phases/*.yml, tasks.yaml
+│   │   ├── → writes: contexts/phase*/context_*.md  
+│   │   └── → manages: task status, progress tracking
+│   │
+│   └── BlueprintGenerator (src/blueprint_generator.py)
+│       ├── → reads: context files, task data, system code
+│       ├── → analyzes: imports, dependencies, data flows
+│       └── → writes: docs/blueprints/phase_*_blueprint.md
+│
+├── 🖥️ USER INTERFACES  
+│   ├── CLI Interface (cli/hdw-task.py)
+│   │   ├── → imports: TaskManager
+│   │   ├── → commands: start, commit, block, status, phases
+│   │   └── → triggers: git operations, blueprint generation
+│   │
+│   └── Web Dashboard (hdw_complete.py)
+│       ├── → imports: TaskManager
+│       ├── → serves: Flask web interface
+│       └── → endpoints: /api/start_task, /api/complete_task
+│
+└── 📄 DATA LAYER
+    ├── Phase Definition (phases/phase""" + str(phase_id) + """_*.yml)
+    ├── Context Files (contexts/phase""" + str(phase_id) + """/)
+    └── This Blueprint (docs/blueprints/phase_""" + str(phase_id) + """_blueprint.md)
+```
+
+### 🔄 Data Flow Analysis
+"""
+        
+        # Add data flow information
+        for flow_name, files in architecture['data_flows'].items():
+            if files:
+                blueprint += f"**{flow_name}:**\n"
+                for file_path in files[:2]:  # Show top 2 files
+                    blueprint += f"- `{file_path}`\n"
+                blueprint += "\n"
+        
+        blueprint += """### 🔗 Integration Points
+
+"""
+        
+        # Add API endpoints if any
+        if architecture['api_endpoints']:
+            blueprint += "**Web API Endpoints:**\n"
+            for file_path, endpoints in architecture['api_endpoints'].items():
+                if endpoints:
+                    blueprint += f"- `{file_path}`: {len(endpoints)} endpoints\n"
+                    for endpoint in endpoints[:3]:  # Show top 3
+                        methods = ', '.join(endpoint['methods'])
+                        blueprint += f"  - `{methods} {endpoint['route']}`\n"
+            blueprint += "\n"
+        
+        # Add file dependencies
+        blueprint += "**File Dependencies:**\n"
+        for file_path, deps in architecture['dependencies'].items():
+            if deps.get('reads_files') or deps.get('writes_files'):
+                blueprint += f"- `{file_path}`\n"
+                if deps.get('reads_files'):
+                    blueprint += f"  📖 Reads: {', '.join(deps['reads_files'][:2])}\n"
+                if deps.get('writes_files'):
+                    blueprint += f"  ✍️ Writes: {', '.join(deps['writes_files'][:2])}\n"
+        
+        blueprint += """
+
+---
+
+## 🚀 Session Handoff Information
+
+### For New Claude Sessions
+
+**You're working on:** Phase """ + str(phase_id) + f""" of the Honey Duo Wealth project management system.
+
+**Goal:** {phase_info.get('description', 'Build a system for seamless Claude session handoffs')}
+
+**Current Status:** {progress['completed']}/{progress['total']} tasks completed ({progress['percentage']:.1f}%)
+
+### Quick Start Commands
+```bash
+# Check current status
+python cli/hdw-task.py status
+
+# See phase progress  
+python cli/hdw-task.py phases
+
+# List available tasks
+python cli/hdw-task.py list --phase {phase_id}
+
+# Start next task
+python cli/hdw-task.py start <task-id>
+```
+
+### Next Immediate Actions
+"""
+        
+        # Add next steps based on current progress
         if progress['percentage'] == 100:
-            blueprint += self._generate_completion_summary(target_phase, phase_tasks)
+            blueprint += f"""
+**🎉 Phase {phase_id} Complete!**
+- All tasks have been implemented successfully
+- System architecture is stable and documented
+- Ready to move to next phase or project completion
+
+### Completion Summary
+- ✅ All {progress['total']} tasks completed
+- ✅ System architecture documented  
+- ✅ Integration points verified
+- ✅ Session handoff capability proven
+"""
         else:
-            blueprint += self._generate_next_steps(target_phase, tasks_by_status)
+            if tasks_by_status['blocked']:
+                blueprint += f"1. **Resolve {len(tasks_by_status['blocked'])} blocked tasks**\n"
+                for task in tasks_by_status['blocked'][:2]:
+                    blueprint += f"   - {task['id']}: {task.get('description', '')}\n"
+                blueprint += "\n"
+            
+            if tasks_by_status['in-progress']:
+                blueprint += f"2. **Complete {len(tasks_by_status['in-progress'])} in-progress tasks**\n"
+                for task in tasks_by_status['in-progress']:
+                    blueprint += f"   - {task['id']}: {task.get('description', '')}\n"
+                blueprint += "\n"
+            
+            if tasks_by_status['pending']:
+                blueprint += f"3. **Start next pending task** ({len(tasks_by_status['pending'])} remaining)\n"
+                next_task = tasks_by_status['pending'][0]
+                blueprint += f"   - **Recommended:** {next_task['id']} - {next_task.get('description', '')}\n"
+                blueprint += f"   - **Output:** {next_task.get('output', '')}\n"
+                blueprint += "\n"
+        
+        blueprint += f"""
+### Key Files for This Phase
+- **Phase Definition:** `phases/phase{phase_id}_*.yml`
+- **Context Files:** `contexts/phase{phase_id}/`
+- **This Blueprint:** `docs/blueprints/phase_{phase_id}_blueprint.md`
+
+---
+
+**🎯 This is the complete source of truth for Phase {phase_id}. Everything you need to continue development is documented above.**
+
+*Last updated: {timestamp}*
+"""
         
         return blueprint
     
-    def _generate_completion_summary(self, phase_id: int, tasks: List[Dict]) -> str:
-        """Generate summary for completed phase."""
-        return f"""
-## 🎉 Phase {phase_id} Completion Summary
-
-**Status:** ✅ PHASE COMPLETE
-
-All tasks in this phase have been successfully completed. The following deliverables are ready:
-
-### Created Artifacts
-"""
-        # Could analyze actual files created, but for now provide structure
-        # This could be enhanced to scan git commits, file system changes, etc.
-    
-    def _generate_next_steps(self, phase_id: int, tasks_by_status: Dict) -> str:
-        """Generate next steps for incomplete phase."""
-        next_steps = f"""
-## 🚀 Next Steps for Phase {phase_id}
-
+    def _generate_detailed_task_section(self, task: Dict[str, Any]) -> str:
+        """Generate detailed section for a single task."""
+        task_id = task['id']
+        status = task.get('status', 'pending')
+        
+        section = f"""#### {task_id}
+**Description:** {task.get('description', '')}
+**Expected Output:** {task.get('output', 'Not specified')}
+**Status:** {status}
 """
         
-        if tasks_by_status['blocked']:
-            next_steps += f"### 🚫 Resolve Blocked Tasks ({len(tasks_by_status['blocked'])})\n"
-            for task in tasks_by_status['blocked']:
-                next_steps += f"- **{task['id']}**: {task.get('description', '')}\n"
-            next_steps += "\n"
+        if task.get('updated'):
+            section += f"**Last Updated:** {task['updated'][:19]}\n"
         
-        if tasks_by_status['in-progress']:
-            next_steps += f"### 🔄 Complete In-Progress Tasks ({len(tasks_by_status['in-progress'])})\n"
-            for task in tasks_by_status['in-progress']:
-                next_steps += f"- **{task['id']}**: {task.get('description', '')}\n"
-            next_steps += "\n"
+        # Add acceptance criteria if available
+        if task.get('acceptance_criteria'):
+            section += f"**Acceptance Criteria:**\n"
+            for criteria in task['acceptance_criteria']:
+                section += f"- {criteria}\n"
         
-        if tasks_by_status['pending']:
-            next_steps += f"### ⏳ Start Pending Tasks ({len(tasks_by_status['pending'])})\n"
-            # Show first few pending tasks as immediate priorities
-            for task in tasks_by_status['pending'][:3]:
-                next_steps += f"- **{task['id']}**: {task.get('description', '')}\n"
-            if len(tasks_by_status['pending']) > 3:
-                next_steps += f"- ... and {len(tasks_by_status['pending']) - 3} more\n"
-            next_steps += "\n"
+        # Add context information if available
+        context_data = self.get_task_context_content(task_id, task.get('phase'))
+        if context_data:
+            if context_data['implementation_notes']:
+                section += f"**Implementation Notes:**\n"
+                for note in context_data['implementation_notes'][:2]:  # Show top 2
+                    section += f"- {note}\n"
+            
+            if context_data['decisions']:
+                section += f"**Key Decisions:**\n"
+                for decision in context_data['decisions'][:2]:  # Show top 2
+                    section += f"- {decision}\n"
         
-        return next_steps
+        # Add task history
+        if task.get('notes'):
+            section += f"**History:**\n"
+            for note in task['notes'][-3:]:  # Show last 3 notes
+                timestamp = note.get('timestamp', 'Unknown time')[:19]
+                note_text = note.get('note', '')
+                section += f"- **{timestamp}:** {note_text}\n"
+        
+        section += "\n"
+        return section
     
-    def generate_session_handoff(self, include_phase: int = None) -> str:
-        """Generate comprehensive session handoff document."""
+    def generate_session_handoff(self) -> str:
+        """Generate comprehensive session handoff with architecture context."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        handoff = f"""# 🤝 Claude Session Handoff Document
+        handoff = f"""# 🤝 Claude Session Handoff - Technical Deep Dive
 
 **Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **Session ID:** session_{timestamp}
 **Project:** Honey Duo Wealth Project Management System
 
-## 📋 Project Overview
+## 🎯 Mission Briefing
 
-This is the **Honey Duo Wealth** project management system designed to enable seamless handoffs between Claude sessions for multi-phase development projects.
+You're joining development of a **multi-phase project management system** designed for seamless Claude session handoffs. The system tracks tasks across phases, auto-generates documentation, and preserves context between sessions.
 
-**Main Goal:** Create a system where any Claude session can pick up work exactly where the previous one left off, with full context and understanding.
-
-## 🎯 Current System State
+## 📊 Current Development Status
 
 """
         
-        # Get current phase progress
+        # Add current progress
         phase_progress = self.task_manager.get_phase_progress()
         tasks_data = self.task_manager.load_tasks()
         
-        # Overall project status
         total_tasks = sum(p['total'] for p in phase_progress.values())
         total_completed = sum(p['completed'] for p in phase_progress.values())
         overall_progress = (total_completed / total_tasks * 100) if total_tasks > 0 else 0
         
         handoff += f"**Overall Progress:** {total_completed}/{total_tasks} tasks ({overall_progress:.1f}%)\n\n"
         
-        # Phase-by-phase status
-        for phase_id in sorted(phase_progress.keys()):
-            progress = phase_progress[phase_id]
-            status_emoji = "✅" if progress['percentage'] == 100 else "🔄" if progress['completed'] > 0 else "⏳"
-            
-            handoff += f"### {status_emoji} Phase {phase_id}: {progress['name']}\n"
-            handoff += f"- **Progress:** {progress['completed']}/{progress['total']} tasks ({progress['percentage']:.1f}%)\n"
-            handoff += f"- **Status:** {'Complete' if progress['percentage'] == 100 else 'In Progress' if progress['completed'] > 0 else 'Not Started'}\n"
-            
-            if progress['in_progress'] > 0:
-                # Show which tasks are currently in progress
-                in_progress_tasks = [t for t in tasks_data.get("tasks", []) 
-                                   if t.get("phase") == phase_id and t.get("status") == "in-progress"]
-                if in_progress_tasks:
-                    handoff += f"- **Active Tasks:** {', '.join(t['id'] for t in in_progress_tasks)}\n"
-            
-            if progress['blocked'] > 0:
-                handoff += f"- **⚠️ Blocked Tasks:** {progress['blocked']}\n"
-            
-            handoff += "\n"
+        # Show what's been built and what's next
+        handoff += "### ✅ What's Been Built\n"
+        completed_tasks = [t for t in tasks_data.get("tasks", []) if t.get('status') == 'completed']
+        for task in completed_tasks:
+            handoff += f"- **{task['id']}:** {task.get('description', '')} → `{task.get('output', '')}`\n"
         
-        handoff += """## 🛠️ What's Been Built
+        handoff += "\n### 🔄 What You're Continuing\n"
+        pending_tasks = [t for t in tasks_data.get("tasks", []) if t.get('status') == 'pending']
+        for task in pending_tasks[:3]:
+            handoff += f"- **{task['id']}:** {task.get('description', '')} → `{task.get('output', '')}`\n"
+        
+        handoff += f"""
 
-### Core System Components
-- **✅ Multi-Phase Task Manager** (`src/task_manager.py`) - Loads tasks from phase files
-- **✅ Enhanced CLI Tool** (`cli/hdw-task.py`) - Phase-aware task management  
-- **✅ Web Dashboard** (`hdw_complete.py`) - Phase progress tracking and management
-- **✅ Context System** - Organized context files in `contexts/phase*/`
-- **🔄 Blueprint Generator** (`src/blueprint_generator.py`) - Auto-documentation (this module)
+## 🏗️ System Architecture Overview
 
-### File Structure
+### Core Components
 ```
-honey_duo_wealth/
-├── phases/                    # Phase task definitions
-│   └── phase1_pm_tasks.yml   # Current phase
-├── contexts/                  # Organized context files
-│   └── phase1/               # Phase-specific contexts
-├── src/                      # Core modules
-│   ├── task_manager.py       # Enhanced task management
-│   └── blueprint_generator.py # Auto-documentation
-├── docs/blueprints/          # Generated documentation
-├── docs/sessions/            # Session handoff docs
-└── claude_reports/           # Claude handoff reports
+TaskManager (src/task_manager.py)
+├── Manages multi-phase task loading from YAML files
+├── Handles context file generation and organization  
+├── Tracks progress across phases
+└── Integrates with CLI and Web UI
+
+CLI Interface (cli/hdw-task.py)
+├── Enhanced with blueprint auto-generation
+├── Supports phase-aware task management
+├── Triggers git operations and documentation
+└── Generates Claude handoff reports
+
+Web Dashboard (hdw_complete.py)  
+├── Phase-aware progress tracking
+├── RESTful API for task operations
+├── Visual task management interface
+├── Blueprint Generator integration
+└── Integrated Claude report generation
+
+BlueprintGenerator (src/blueprint_generator.py)
+├── Analyzes system architecture automatically
+├── Creates comprehensive technical blueprints
+├── Maps component connections and data flows
+└── Generates session handoff documents
 ```
 
-## 🧠 Recent Decisions & Context
+## 🚀 How to Continue Development
 
-"""
-        
-        # Add recent completed tasks and their context
-        recent_completed = []
-        for task in tasks_data.get("tasks", []):
-            if task.get('status') == 'completed' and task.get('updated'):
-                recent_completed.append(task)
-        
-        # Sort by update time, get most recent
-        recent_completed.sort(key=lambda x: x.get('updated', ''), reverse=True)
-        
-        for task in recent_completed[:5]:  # Show last 5 completed
-            context_data = self.get_task_context_content(task['id'], task.get('phase'))
-            handoff += f"### ✅ {task['id']} (Phase {task.get('phase', 0)})\n"
-            handoff += f"**Completed:** {task.get('updated', 'Unknown')[:10]}\n"
-            handoff += f"**What:** {task.get('description', '')}\n"
-            
-            if context_data and context_data['decisions']:
-                handoff += f"**Key Decisions:**\n"
-                for decision in context_data['decisions'][:2]:  # Show top 2 decisions
-                    handoff += f"- {decision}\n"
-            handoff += "\n"
-        
-        handoff += """## 🚀 How to Continue
-
-### Immediate Next Actions
-1. **Check Current Status:** Review phase progress and active tasks
-2. **Pick Up In-Progress Work:** Look for tasks with status "in-progress"  
-3. **Use Context Files:** Check `contexts/phase*/context_*.md` for task details
-4. **Update Progress:** Use CLI or web UI to mark tasks complete
-
-### Key Commands
+### Immediate Commands
 ```bash
-# See overall status
+# Check current system status
 python cli/hdw-task.py status
 
-# View phase progress  
-python cli/hdw-task.py phases
+# See what tasks are available
+python cli/hdw-task.py list
 
-# Start a task (creates context file)
+# Start a specific task
 python cli/hdw-task.py start <task-id>
 
-# Complete a task
-python cli/hdw-task.py commit <task-id>
-
-# Generate blueprints
-python src/blueprint_generator.py phase --phase 1 --save
-python src/blueprint_generator.py handoff --save
+# Test blueprint generation
+python src/blueprint_generator.py update --phase-id 1
 ```
 
 ### Web Interface
-- **Dashboard:** http://localhost:5000 (hdw / HoneyDuo2025!)
-- **Tasks:** Phase-organized task management
-- **Reports:** Generate Claude handoff reports
+- **URL:** http://hdw.honey-duo.com
+- **Login:** hdw / HoneyDuo2025!
+- **Features:** Phase tracking, task management, blueprint generation
 
-## 🎯 Design Principles
+### Development Workflow
+1. **Pick a pending task** from the list above
+2. **Start the task** to generate context file
+3. **Implement the required output** 
+4. **Commit the task** - triggers auto-blueprint generation
+5. **Generated blueprints** appear in `docs/blueprints/`
 
-1. **Keep It Simple** - No over-engineering, focus on practical handoffs
-2. **Document Everything** - Auto-generate context and decisions  
-3. **Phase-Based Organization** - Break work into manageable phases
-4. **Session Continuity** - Enable seamless Claude handoffs
-5. **Test by Using** - Build the system using the system itself
+## 🎯 Next Immediate Actions
 
-## 📞 Need Help?
+### Priority Tasks
+"""
+        
+        for task in pending_tasks[:2]:  # Show top 2 pending
+            handoff += f"- **{task['id']}:** {task.get('description', '')}\n"
+        
+        handoff += """
 
-- **Context Files:** Check `contexts/phase*/` for task-specific information
-- **Recent Work:** Look at `claude_reports/` for latest handoff reports
-- **System Status:** Use web dashboard or CLI status commands
-- **Phase Progress:** Generated blueprints show detailed phase status
+### Success Metrics
+- ✅ Any Claude session can pick up work immediately  
+- ✅ System generates comprehensive technical blueprints
+- ✅ Architecture connections are clearly mapped
+- ✅ Documentation stays current automatically
 
 ---
 
-**Ready to continue development!** 🚀
-
-This handoff document contains everything needed to understand the current state and continue work seamlessly.
+**🚀 Ready to continue development!** The system is designed to support you with context, documentation, and clear next steps.
 """
         
         return handoff
     
-    def save_blueprint(self, content: str, filename: str) -> str:
-        """Save blueprint to docs/blueprints/ directory."""
-        filepath = self.blueprints_path / filename
+    def generate_system_architecture_blueprint(self) -> str:
+        """Generate comprehensive system architecture blueprint."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        try:
-            with open(filepath, 'w') as f:
-                f.write(content)
-            return str(filepath)
-        except Exception as e:
-            print(f"Error saving blueprint to {filepath}: {e}")
-            return None
+        # Analyze the actual system
+        architecture = self.analyzer.analyze_project()
+        
+        # Get current progress
+        phase_progress = self.task_manager.get_phase_progress()
+        tasks_data = self.task_manager.load_tasks()
+        
+        blueprint = f"""# 🏗️ Honey Duo Wealth System Architecture Blueprint
+
+**Generated:** {timestamp}
+**System Analysis:** {len(architecture['files'])} Python files analyzed
+
+## 📊 Project Status Summary
+
+"""
+        
+        # Add progress overview
+        total_tasks = sum(p['total'] for p in phase_progress.values())
+        total_completed = sum(p['completed'] for p in phase_progress.values())
+        overall_progress = (total_completed / total_tasks * 100) if total_tasks > 0 else 0
+        
+        blueprint += f"**Overall Progress:** {total_completed}/{total_tasks} tasks ({overall_progress:.1f}%)\n\n"
+        
+        blueprint += f"""## 🏗️ System Architecture Map
+
+### Core Components & Connections
+
+```
+📁 HONEY DUO WEALTH PROJECT MANAGEMENT SYSTEM
+│
+├── 🧠 CORE ENGINE
+│   ├── TaskManager (src/task_manager.py)
+│   │   ├── → reads: phases/*.yml, tasks.yaml
+│   │   ├── → writes: contexts/phase*/context_*.md  
+│   │   ├── → manages: task status, progress tracking
+│   │   └── → provides: multi-phase support, context generation
+│   │
+│   └── BlueprintGenerator (src/blueprint_generator.py)
+│       ├── → reads: context files, task data, system code
+│       ├── → analyzes: imports, dependencies, data flows
+│       ├── → writes: docs/blueprints/, docs/sessions/
+│       └── → provides: architecture mapping, session handoffs
+│
+├── 🖥️ USER INTERFACES  
+│   ├── CLI Interface (cli/hdw-task.py)
+│   │   ├── → imports: TaskManager
+│   │   ├── → commands: start, commit, block, status, phases
+│   │   ├── → triggers: git operations, blueprint generation
+│   │   └── → generates: Claude handoff reports
+│   │
+│   └── Web Dashboard (hdw_complete.py)
+│       ├── → imports: TaskManager
+│       ├── → serves: Flask web interface
+│       ├── → endpoints: /api/start_task, /api/complete_task, /api/generate_blueprint
+│       ├── → provides: visual progress tracking, task management
+│       └── → features: blueprint generator UI, phase management
+│
+└── 📄 DATA & CONFIGURATION
+    ├── Phase Definitions (phases/*.yml)
+    │   └── → defines: tasks, acceptance criteria, dependencies
+    │
+    ├── Context Files (contexts/phase*/)
+    │   └── → contains: task context, implementation notes
+    │
+    ├── Generated Documentation (docs/)
+    │   ├── blueprints/ → system architecture, progress reports
+    │   └── sessions/ → Claude handoff documents
+    │
+    └── Legacy Support (tasks.yaml)
+        └── → backward compatibility with original task format
+```
+
+## 🔄 Data Flow Architecture
+
+"""
+        
+        # Add data flow analysis
+        for flow_name, files in architecture['data_flows'].items():
+            if files:
+                blueprint += f"### {flow_name}\n"
+                for file_path in files[:2]:  # Show top 2 files
+                    blueprint += f"- `{file_path}`\n"
+                blueprint += "\n"
+        
+        blueprint += """## 🔗 Component Integration Points
+
+### Current Integrations
+- **CLI ↔ TaskManager:** Full integration with multi-phase support
+- **TaskManager ↔ YAML Files:** Reads phase definitions and legacy tasks  
+- **TaskManager ↔ Context Files:** Organized context generation by phase
+- **CLI ↔ Git:** Automatic commits on task completion
+- **CLI ↔ Blueprint Generator:** Auto-generation on task completion
+- **Web UI ↔ TaskManager:** Phase-aware dashboard and task management
+- **Web UI ↔ Blueprint Generator:** Integrated generator interface
+
+---
+
+**🎯 This blueprint provides a complete technical map of system connections, data flows, and integration points.**
+"""
+        
+        return blueprint
     
-    def save_session_handoff(self, content: str) -> str:
-        """Save session handoff document."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"session_{timestamp}.md"
-        filepath = self.sessions_path / filename
+    def update_phase_blueprint(self, phase_id: int) -> str:
+        """Update the comprehensive phase blueprint."""
+        content = self.generate_comprehensive_phase_blueprint(phase_id)
+        doc_path = self.doc_manager.get_phase_document_path(phase_id)
         
-        try:
-            with open(filepath, 'w') as f:
-                f.write(content)
-            return str(filepath)
-        except Exception as e:
-            print(f"Error saving session handoff to {filepath}: {e}")
-            return None
+        # Save the updated document
+        with open(doc_path, 'w') as f:
+            f.write(content)
+        
+        print(f"📋 Updated Phase {phase_id} blueprint: {doc_path.name}")
+        return str(doc_path)
+    
+    def complete_phase(self, phase_id: int) -> str:
+        """Mark a phase as complete and archive the blueprint."""
+        # First update the blueprint one final time
+        self.update_phase_blueprint(phase_id)
+        
+        # Then backup the completed phase
+        backup_path = self.doc_manager.backup_completed_phase(phase_id)
+        
+        if backup_path:
+            print(f"✅ Phase {phase_id} marked as complete and archived!")
+            return backup_path
+        else:
+            return f"Phase {phase_id} blueprint updated but archiving failed"
     
     def auto_generate_on_completion(self, task_id: str) -> Dict[str, str]:
-        """Auto-generate blueprint when a task is completed."""
+        """Auto-update phase blueprint when tasks complete."""
         results = {}
         
-        # Get task info
-        tasks_data = self.task_manager.load_tasks()
-        task = next((t for t in tasks_data.get("tasks", []) if t["id"] == task_id), None)
-        
-        if not task:
-            return {"error": f"Task {task_id} not found"}
-        
-        # Generate task blueprint
-        task_blueprint = self.generate_task_blueprint(task_id, task)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-        task_filename = f"task_{task_id}_{timestamp}.md"
-        task_filepath = self.save_blueprint(task_blueprint, task_filename)
-        if task_filepath:
-            results["task_blueprint"] = task_filepath
-        
-        # Check if phase is complete and generate phase blueprint
-        phase_id = task.get('phase', 0)
-        phase_progress = self.task_manager.get_phase_progress()
-        
-        if phase_id in phase_progress and phase_progress[phase_id]['percentage'] == 100:
-            phase_blueprint = self.generate_phase_blueprint(phase_id=phase_id)
-            phase_filename = f"phase{phase_id}_completed_{timestamp}.md"
-            phase_filepath = self.save_blueprint(phase_blueprint, phase_filename)
-            if phase_filepath:
-                results["phase_blueprint"] = phase_filepath
-        
-        return results
+        try:
+            # Find which phase this task belongs to
+            tasks_data = self.task_manager.load_tasks()
+            task = next((t for t in tasks_data.get("tasks", []) if t["id"] == task_id), None)
+            
+            if not task:
+                return {"error": f"Task {task_id} not found"}
+            
+            phase_id = task.get('phase', 1)
+            
+            # Update the phase blueprint
+            blueprint_path = self.update_phase_blueprint(phase_id)
+            results["phase_blueprint"] = blueprint_path
+            
+            # Check if phase is now complete
+            phase_progress = self.task_manager.get_phase_progress()
+            if phase_id in phase_progress and phase_progress[phase_id]['percentage'] == 100:
+                completed_path = self.complete_phase(phase_id)
+                results["phase_completed"] = completed_path
+            
+            return results
+            
+        except Exception as e:
+            return {"error": f"Phase blueprint update failed: {e}"}
 
 def main():
-    """CLI interface for blueprint generator."""
+    """CLI interface for phase blueprint generator."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Generate blueprint documentation")
-    parser.add_argument('command', choices=['task', 'phase', 'handoff', 'auto'], 
-                       help="Type of documentation to generate")
-    parser.add_argument('--task', '-t', help="Task ID for task blueprint")
-    parser.add_argument('--phase', '-p', help="Phase name/ID for phase blueprint")
-    parser.add_argument('--phase-id', type=int, help="Specific phase ID")
-    parser.add_argument('--output', '-o', help="Output filename")
-    parser.add_argument('--save', '-s', action='store_true', 
-                       help="Save to docs directory")
+    parser = argparse.ArgumentParser(description="Generate comprehensive phase blueprints")
+    parser.add_argument('command', choices=['phase', 'complete', 'update', 'handoff', 'architecture'], 
+                       help="Command to execute")
+    parser.add_argument('--phase-id', type=int, default=1, help="Phase ID")
     parser.add_argument('--project-root', default=".", help="Project root directory")
     
     args = parser.parse_args()
     
-    generator = BlueprintGenerator(args.project_root)
+    generator = PhaseBlueprintGenerator(args.project_root)
     
-    if args.command == 'task':
-        if not args.task:
-            print("Task ID required for task blueprint")
-            return
-        
-        content = generator.generate_task_blueprint(args.task)
-        
-        if args.save:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-            filename = args.output or f"task_{args.task}_{timestamp}.md"
-            filepath = generator.save_blueprint(content, filename)
-            print(f"Task blueprint saved to: {filepath}")
-        else:
-            print(content)
+    if args.command == 'phase':
+        content = generator.generate_comprehensive_phase_blueprint(args.phase_id)
+        print(content)
     
-    elif args.command == 'phase':
-        content = generator.generate_phase_blueprint(args.phase, args.phase_id)
-        
-        if args.save:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-            phase_name = args.phase or str(args.phase_id or "current")
-            filename = args.output or f"phase_{phase_name}_{timestamp}.md"
-            filepath = generator.save_blueprint(content, filename)
-            print(f"Phase blueprint saved to: {filepath}")
-        else:
-            print(content)
+    elif args.command == 'update':
+        filepath = generator.update_phase_blueprint(args.phase_id)
+        print(f"Phase {args.phase_id} blueprint updated: {filepath}")
+    
+    elif args.command == 'complete':
+        backup_path = generator.complete_phase(args.phase_id)
+        print(f"Phase {args.phase_id} completed: {backup_path}")
     
     elif args.command == 'handoff':
         content = generator.generate_session_handoff()
-        
-        if args.save:
-            filepath = generator.save_session_handoff(content)
-            print(f"Session handoff saved to: {filepath}")
-        else:
-            print(content)
+        print(content)
     
-    elif args.command == 'auto':
-        if not args.task:
-            print("Task ID required for auto-generation")
-            return
-        
-        results = generator.auto_generate_on_completion(args.task)
-        if "error" in results:
-            print(f"Error: {results['error']}")
-        else:
-            print("Auto-generated blueprints:")
-            for doc_type, filepath in results.items():
-                print(f"  {doc_type}: {filepath}")
+    elif args.command == 'architecture':
+        content = generator.generate_system_architecture_blueprint()
+        print(content)
 
 if __name__ == "__main__":
     main()
