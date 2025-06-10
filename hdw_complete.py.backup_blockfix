@@ -540,13 +540,6 @@ def tasks():
                         if task.get('tests'):
                             html += f'<div class="task-meta">Tests: {task["tests"]}</div>'
                         
-                        # Show block reason for blocked tasks
-                        if status == "blocked" and task.get("notes"):
-                            for note in reversed(task.get("notes", [])):
-                                if "Blocked:" in note.get("note", ""):
-                                    html += f'<div class="task-meta" style="color: #ff6b6b; font-weight: bold;">🚫 {note["note"]}</div>'
-                                    break
-                        
                         html += """
                             </div>
                             <div class="task-actions">

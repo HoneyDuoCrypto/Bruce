@@ -1,7 +1,17 @@
+# Context for Task: pm-web-phases
+
+**Phase:** 1 - Project Management System
+**Description:** Update web UI to show phase-based progress
+
+**Expected Output:** hdw_complete.py with phase views
+
+## Context Documentation:
+
+=== hdw_complete.py ===
 #!/usr/bin/env python3
 """
 Honey Duo Wealth Complete Management Interface
-Enhanced with multi-phase support and progress tracking
+Full functionality for task management, reports, and project control
 """
 
 from flask import Flask, request, jsonify, make_response, redirect, url_for
@@ -9,14 +19,9 @@ from functools import wraps
 import yaml
 import subprocess
 import os
-import sys
 from pathlib import Path
 import datetime
 import json
-
-# Add src to path to import TaskManager
-sys.path.insert(0, str(Path(__file__).parent))
-from src.task_manager import TaskManager
 
 app = Flask(__name__)
 app.secret_key = 'hdw-honey-duo-2025-secure'
@@ -48,8 +53,17 @@ def requires_auth(f):
 
 PROJECT_ROOT = Path.home() / "hdw_setup" / "honey_duo_wealth"
 
-# Initialize TaskManager
-task_manager = TaskManager(PROJECT_ROOT)
+def load_tasks():
+    tasks_file = PROJECT_ROOT / "tasks.yaml"
+    if not tasks_file.exists():
+        return []
+    
+    try:
+        with open(tasks_file, 'r') as f:
+            data = yaml.safe_load(f)
+            return data.get('tasks', [])
+    except:
+        return []
 
 def run_cli_command(command):
     """Run CLI command and return result"""
@@ -61,7 +75,7 @@ def run_cli_command(command):
         return {"success": False, "output": "", "error": str(e)}
 
 def get_base_html(title, active_page="dashboard"):
-    """Get base HTML template with enhanced styling for phases"""
+    """Get base HTML template"""
     return f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -255,52 +269,11 @@ def get_base_html(title, active_page="dashboard"):
                 padding: 60px 20px;
                 font-size: 18px;
             }}
-            .phase-section {{
-                margin: 30px 0;
-                padding: 20px;
-                background: rgba(30, 30, 30, 0.5);
-                border-radius: 12px;
-                border: 1px solid rgba(255, 215, 0, 0.2);
-            }}
-            .phase-header {{
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-            }}
-            .phase-title {{
-                font-size: 1.3em;
-                color: #ffd700;
-                font-weight: bold;
-            }}
-            .phase-progress {{
-                display: flex;
-                align-items: center;
-                gap: 15px;
-            }}
-            .progress-bar {{
-                width: 200px;
-                height: 20px;
-                background: rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                overflow: hidden;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }}
-            .progress-fill {{
-                height: 100%;
-                background: linear-gradient(90deg, #ffd700 0%, #ffed4e 100%);
-                transition: width 0.3s ease;
-            }}
-            .progress-text {{
-                font-size: 14px;
-                color: #ccc;
-            }}
             @media (max-width: 768px) {{
                 .task-item {{ flex-direction: column; align-items: flex-start; }}
                 .task-actions {{ margin-top: 15px; width: 100%; }}
                 .nav {{ gap: 10px; }}
                 .nav a {{ padding: 8px 16px; font-size: 14px; }}
-                .progress-bar {{ width: 150px; }}
             }}
         </style>
     </head>
@@ -312,7 +285,6 @@ def get_base_html(title, active_page="dashboard"):
                 <div class="nav">
                     <a href="/" class="{'active' if active_page == 'dashboard' else ''}">📊 Dashboard</a>
                     <a href="/tasks" class="{'active' if active_page == 'tasks' else ''}">📋 Tasks</a>
-                    <a href="/phases" class="{'active' if active_page == 'phases' else ''}">📁 Phases</a>
                     <a href="/reports" class="{'active' if active_page == 'reports' else ''}">📈 Reports</a>
                     <a href="/help" class="{'active' if active_page == 'help' else ''}">❓ Help</a>
                 </div>
@@ -325,17 +297,13 @@ def get_base_html(title, active_page="dashboard"):
 @app.route('/')
 @requires_auth
 def dashboard():
-    tasks_data = task_manager.load_tasks()
-    tasks = tasks_data.get("tasks", [])
+    tasks = load_tasks()
     
     # Calculate statistics
     status_counts = {}
     for task in tasks:
         status = task.get('status', 'pending')
         status_counts[status] = status_counts.get(status, 0) + 1
-    
-    # Get phase progress
-    phase_progress = task_manager.get_phase_progress()
     
     # Get recent tasks
     recent_tasks = sorted([t for t in tasks if t.get('updated')], 
@@ -371,42 +339,11 @@ def dashboard():
             </div>
             
             <div class="content-section">
-                <h2 class="section-title">📈 Phase Progress</h2>
-    """
-    
-    # Show phase progress
-    for phase_id in sorted(phase_progress.keys()):
-        progress = phase_progress[phase_id]
-        bar_width = int(progress["percentage"])
-        
-        html += f"""
-                <div class="phase-section">
-                    <div class="phase-header">
-                        <div class="phase-title">📁 Phase {phase_id}: {progress['name']}</div>
-                        <div class="phase-progress">
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: {bar_width}%"></div>
-                            </div>
-                            <div class="progress-text">{progress['percentage']}% ({progress['completed']}/{progress['total']})</div>
-                        </div>
-                    </div>
-                    <div style="color: #ccc; font-size: 14px;">
-                        {progress['completed']} completed, {progress['in_progress']} in progress, {progress['pending']} pending
-                        {f", {progress['blocked']} blocked" if progress['blocked'] > 0 else ""}
-                    </div>
-                </div>
-        """
-    
-    html += """
-            </div>
-            
-            <div class="content-section">
                 <h2 class="section-title">🚀 Quick Actions</h2>
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
                     <a href="/tasks" class="btn btn-primary">📋 Manage Tasks</a>
-                    <a href="/phases" class="btn btn-info">📁 View Phases</a>
                     <a href="/reports" class="btn btn-success">📈 Generate Reports</a>
-                    <button onclick="location.reload()" class="btn btn-warning">🔄 Refresh Dashboard</button>
+                    <button onclick="location.reload()" class="btn btn-info">🔄 Refresh Dashboard</button>
                 </div>
             </div>
             
@@ -417,7 +354,6 @@ def dashboard():
     if recent_tasks:
         for task in recent_tasks:
             status_icon = {'pending': '⏳', 'in-progress': '🔄', 'completed': '✅', 'blocked': '🚫'}.get(task.get('status'), '❓')
-            phase_info = f"Phase {task.get('phase', 0)}" if task.get('phase', 0) > 0 else "Legacy"
             updated = task.get('updated', '')
             if updated:
                 try:
@@ -433,7 +369,7 @@ def dashboard():
                     <div class="task-info">
                         <div class="task-title">{status_icon} {task['id']}</div>
                         <div class="task-meta">{task.get('description', '')}</div>
-                        <div class="task-meta">{phase_info} • Updated: {time_str} • Status: {task.get('status', 'pending')}</div>
+                        <div class="task-meta">Updated: {time_str} • Status: {task.get('status', 'pending')}</div>
                     </div>
                     <div class="task-actions">
                         <a href="/tasks" class="btn btn-primary">📋 Manage</a>
@@ -460,8 +396,7 @@ def dashboard():
 @app.route('/tasks')
 @requires_auth
 def tasks():
-    tasks_data = task_manager.load_tasks()
-    tasks = tasks_data.get("tasks", [])
+    tasks = load_tasks()
     
     html = get_base_html("Task Management", "tasks")
     
@@ -474,105 +409,79 @@ def tasks():
             </div>
     """
     
-    # Group tasks by phase
-    tasks_by_phase = {}
-    for task in tasks:
-        phase = task.get('phase', 0)
-        if phase not in tasks_by_phase:
-            tasks_by_phase[phase] = {
-                'pending': [],
-                'in-progress': [],
-                'completed': [],
-                'blocked': []
-            }
-        status = task.get('status', 'pending')
-        tasks_by_phase[phase][status].append(task)
+    # Group tasks by status
+    task_groups = {
+        'pending': [t for t in tasks if t.get('status') == 'pending'],
+        'in-progress': [t for t in tasks if t.get('status') == 'in-progress'],
+        'completed': [t for t in tasks if t.get('status') == 'completed'],
+        'blocked': [t for t in tasks if t.get('status') == 'blocked']
+    }
     
-    # Display tasks grouped by phase
-    for phase_id in sorted(tasks_by_phase.keys()):
-        phase_info = tasks_data.get("phases", {}).get(str(phase_id), {})
-        phase_name = phase_info.get("name", "Legacy Tasks" if phase_id == 0 else f"Phase {phase_id}")
-        
-        # Count tasks in this phase
-        phase_task_count = sum(len(tasks_by_phase[phase_id][status]) for status in ['pending', 'in-progress', 'completed', 'blocked'])
-        
-        if phase_task_count > 0:
+    group_info = {
+        'pending': ('⏳ Pending Tasks', 'These tasks are ready to start'),
+        'in-progress': ('🔄 In Progress', 'Currently active tasks'),
+        'completed': ('✅ Completed Tasks', 'Successfully finished tasks'),
+        'blocked': ('🚫 Blocked Tasks', 'Tasks waiting for resolution')
+    }
+    
+    for status, task_list in task_groups.items():
+        if task_list:  # Only show sections with tasks
+            title, description = group_info[status]
             html += f"""
             <div class="content-section">
-                <h2 class="section-title">📁 {phase_name}</h2>
+                <h2 class="section-title">{title}</h2>
+                <p style="color: #ccc; margin-bottom: 20px;">{description}</p>
             """
             
-            # Show tasks by status within the phase
-            status_order = ['in-progress', 'pending', 'blocked', 'completed']
-            status_info = {
-                'pending': ('⏳', 'Pending'),
-                'in-progress': ('🔄', 'In Progress'),
-                'completed': ('✅', 'Completed'),
-                'blocked': ('🚫', 'Blocked')
-            }
-            
-            for status in status_order:
-                task_list = tasks_by_phase[phase_id][status]
-                if task_list:
-                    emoji, label = status_info[status]
-                    html += f'<h4 style="color: #ffd700; margin: 20px 0 10px 0;">{emoji} {label} ({len(task_list)})</h4>'
-                    
-                    for task in task_list:
-                        updated = task.get('updated', '')
-                        if updated:
-                            try:
-                                dt = datetime.datetime.fromisoformat(updated.replace('Z', '+00:00'))
-                                time_str = dt.strftime('%m/%d %I:%M%p')
-                            except:
-                                time_str = updated[:10]
-                        else:
-                            time_str = 'Never'
-                        
-                        html += f"""
-                        <div class="task-item">
-                            <div class="task-info">
-                                <div class="task-title">{task['id']}</div>
-                                <div class="task-meta">{task.get('description', 'No description')}</div>
-                                <div class="task-meta">Updated: {time_str}</div>
-                                <div class="task-meta">Output: {task.get('output', 'Not specified')}</div>
-                        """
-                        
-                        if task.get('tests'):
-                            html += f'<div class="task-meta">Tests: {task["tests"]}</div>'
-                        
-                        # Show block reason for blocked tasks
-                        if status == "blocked" and task.get("notes"):
-                            for note in reversed(task.get("notes", [])):
-                                if "Blocked:" in note.get("note", ""):
-                                    html += f'<div class="task-meta" style="color: #ff6b6b; font-weight: bold;">🚫 {note["note"]}</div>'
-                                    break
-                        
-                        html += """
-                            </div>
-                            <div class="task-actions">
-                        """
-                        
-                        # Action buttons based on status
-                        if status == 'pending':
-                            html += f'<button class="btn btn-success" onclick="startTask(\'{task["id"]}\')">🚀 Start Task</button>'
-                        elif status == 'in-progress':
-                            html += f'<button class="btn btn-primary" onclick="completeTask(\'{task["id"]}\')">✅ Complete Task</button>'
-                        
-                        if status not in ['completed', 'blocked']:
-                            html += f'<button class="btn btn-danger" onclick="blockTask(\'{task["id"]}\')">🚫 Block Task</button>'
-                        
-                        if status in ['completed', 'blocked', 'in-progress']:
-                            html += f'<a href="/reports?task={task["id"]}" class="btn btn-warning">📈 Generate Report</a>'
-                        
-                        html += """
-                            </div>
-                        </div>
-                        """
+            for task in task_list:
+                updated = task.get('updated', '')
+                if updated:
+                    try:
+                        dt = datetime.datetime.fromisoformat(updated.replace('Z', '+00:00'))
+                        time_str = dt.strftime('%m/%d %I:%M%p')
+                    except:
+                        time_str = updated[:10]
+                else:
+                    time_str = 'Never'
+                
+                html += f"""
+                <div class="task-item">
+                    <div class="task-info">
+                        <div class="task-title">{task['id']}</div>
+                        <div class="task-meta">{task.get('description', 'No description')}</div>
+                        <div class="task-meta">Updated: {time_str}</div>
+                        <div class="task-meta">Output: {task.get('output', 'Not specified')}</div>
+                """
+                
+                if task.get('tests'):
+                    html += f'<div class="task-meta">Tests: {task["tests"]}</div>'
+                
+                html += """
+                    </div>
+                    <div class="task-actions">
+                """
+                
+                # Action buttons based on status
+                if status == 'pending':
+                    html += f'<button class="btn btn-success" onclick="startTask(\'{task["id"]}\')">🚀 Start Task</button>'
+                elif status == 'in-progress':
+                    html += f'<button class="btn btn-primary" onclick="completeTask(\'{task["id"]}\')">✅ Complete Task</button>'
+                
+                if status not in ['completed', 'blocked']:
+                    html += f'<button class="btn btn-danger" onclick="blockTask(\'{task["id"]}\')">🚫 Block Task</button>'
+                
+                if status in ['completed', 'blocked', 'in-progress']:
+                    html += f'<a href="/reports?task={task["id"]}" class="btn btn-warning">📈 Generate Report</a>'
+                
+                html += """
+                    </div>
+                </div>
+                """
             
             html += "</div>"
     
-    if not tasks:
-        html += '<div class="content-section"><div class="empty-state">No tasks found.</div></div>'
+    if not any(task_groups.values()):
+        html += '<div class="content-section"><div class="empty-state">No tasks found. Check your tasks.yaml file.</div></div>'
     
     html += """
         </div>
@@ -652,90 +561,21 @@ def tasks():
     
     return html
 
-@app.route('/phases')
-@requires_auth
-def phases():
-    tasks_data = task_manager.load_tasks()
-    phase_progress = task_manager.get_phase_progress()
-    
-    html = get_base_html("Phase Overview", "phases")
-    
-    html += """
-            <div class="content-section">
-                <h2 class="section-title">📁 Phase Management</h2>
-                <p style="color: #ccc; margin-bottom: 20px;">Track progress across all project phases</p>
-            </div>
-    """
-    
-    for phase_id in sorted(phase_progress.keys()):
-        progress = phase_progress[phase_id]
-        phase_info = tasks_data.get("phases", {}).get(str(phase_id), {})
-        
-        # Get all tasks for this phase
-        phase_tasks = [t for t in tasks_data.get("tasks", []) if t.get("phase", 0) == phase_id]
-        
-        html += f"""
-            <div class="content-section">
-                <div class="phase-header">
-                    <div>
-                        <h3 class="phase-title">📁 Phase {phase_id}: {progress['name']}</h3>
-                        {f'<p style="color: #ccc; margin: 10px 0;">{phase_info.get("description", "")}</p>' if phase_info.get("description") else ''}
-                    </div>
-                    <div class="phase-progress">
-                        <div class="progress-bar" style="width: 300px;">
-                            <div class="progress-fill" style="width: {progress['percentage']}%"></div>
-                        </div>
-                        <div class="progress-text" style="font-size: 18px; color: #ffd700;">{progress['percentage']}%</div>
-                    </div>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0;">
-                    <div style="text-align: center; padding: 15px; background: rgba(0, 204, 0, 0.1); border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #00ff00;">{progress['completed']}</div>
-                        <div style="color: #ccc;">Completed</div>
-                    </div>
-                    <div style="text-align: center; padding: 15px; background: rgba(0, 102, 204, 0.1); border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #0099ff;">{progress['in_progress']}</div>
-                        <div style="color: #ccc;">In Progress</div>
-                    </div>
-                    <div style="text-align: center; padding: 15px; background: rgba(255, 140, 0, 0.1); border-radius: 8px;">
-                        <div style="font-size: 24px; font-weight: bold; color: #ff8c00;">{progress['pending']}</div>
-                        <div style="color: #ccc;">Pending</div>
-                    </div>
-                    {f'<div style="text-align: center; padding: 15px; background: rgba(204, 0, 0, 0.1); border-radius: 8px;"><div style="font-size: 24px; font-weight: bold; color: #ff6b6b;">{progress["blocked"]}</div><div style="color: #ccc;">Blocked</div></div>' if progress['blocked'] > 0 else ''}
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <a href="/tasks" class="btn btn-primary">📋 View Phase Tasks</a>
-                    {f'<span style="color: #888; margin-left: 15px;">Source: {phase_info.get("file", "tasks.yaml")}</span>' if phase_id > 0 else ''}
-                </div>
-            </div>
-        """
-    
-    html += """
-        </div>
-    </body>
-    </html>
-    """
-    
-    return html
-
 @app.route('/reports')
 @requires_auth
 def reports():
-    tasks_data = task_manager.load_tasks()
-    tasks = tasks_data.get("tasks", [])
+    tasks = load_tasks()
     reportable_tasks = [t for t in tasks if t.get('status') in ['completed', 'blocked', 'in-progress']]
     
     # Get task from URL parameter if specified
     selected_task = request.args.get('task', '')
     
-    html = get_base_html("Claude Reports", "reports")
+    html = get_base_html("ChatGPT Reports", "reports")
     
     html += f"""
             <div class="content-section">
-                <h2 class="section-title">📈 Claude Handoff Reports</h2>
-                <p style="color: #ccc; margin-bottom: 20px;">Generate status reports for Claude session handoffs</p>
+                <h2 class="section-title">📈 ChatGPT Status Reports</h2>
+                <p style="color: #ccc; margin-bottom: 20px;">Generate professional status updates for ChatGPT</p>
                 
                 <div class="form-group">
                     <label for="task-select">Select Task:</label>
@@ -743,24 +583,10 @@ def reports():
                         <option value="">Choose a task...</option>
     """
     
-    # Group tasks by phase for better organization
-    tasks_by_phase = {}
     for task in reportable_tasks:
-        phase = task.get('phase', 0)
-        if phase not in tasks_by_phase:
-            tasks_by_phase[phase] = []
-        tasks_by_phase[phase].append(task)
-    
-    for phase_id in sorted(tasks_by_phase.keys()):
-        phase_name = f"Phase {phase_id}" if phase_id > 0 else "Legacy"
-        html += f'<optgroup label="{phase_name}">'
-        
-        for task in tasks_by_phase[phase_id]:
-            selected = 'selected' if task['id'] == selected_task else ''
-            status_icon = {'pending': '⏳', 'in-progress': '🔄', 'completed': '✅', 'blocked': '🚫'}.get(task.get('status'), '❓')
-            html += f'<option value="{task["id"]}" {selected}>{status_icon} {task["id"]} - {task.get("description", "")[:60]}</option>'
-        
-        html += '</optgroup>'
+        selected = 'selected' if task['id'] == selected_task else ''
+        status_icon = {'pending': '⏳', 'in-progress': '🔄', 'completed': '✅', 'blocked': '🚫'}.get(task.get('status'), '❓')
+        html += f'<option value="{task["id"]}" {selected}>{status_icon} {task["id"]} - {task.get("description", "")[:60]}</option>'
     
     html += """
                     </select>
@@ -780,18 +606,17 @@ def reports():
                 <div id="status-message"></div>
                 
                 <div class="form-group">
-                    <label>Generated Report (For Claude Handoff):</label>
+                    <label>Generated Report (Copy & Paste to ChatGPT):</label>
                     <div id="report-output" class="report-area">
-Click "Generate Report" to create a Claude handoff report...
+Click "Generate Report" to create a ChatGPT status update...
 
 The report will include:
-• Task ID and phase information
-• Current status and progress
+• Task ID and current status
 • Summary of work completed
 • Files/artifacts created
-• Context for continuing work
+• Professional formatting for ChatGPT
 
-Reports are automatically saved to: claude_reports/Claude_Handoff_taskname_MMDD_HHMM.txt
+Reports are automatically saved to: chatgpt_reports/ChatGPT_Update_taskname_MMDD_HHMM.txt
                     </div>
                 </div>
             </div>
@@ -849,14 +674,14 @@ Reports are automatically saved to: claude_reports/Claude_Handoff_taskname_MMDD_
             }
             
             navigator.clipboard.writeText(reportText).then(() => {
-                showMessage('📋 Report copied to clipboard! Ready for Claude handoff.', 'success');
+                showMessage('📋 Report copied to clipboard! Paste it into ChatGPT.', 'success');
             }).catch(() => {
                 showMessage('❌ Failed to copy to clipboard', 'error');
             });
         }
         
         function openReportsFolder() {
-            showMessage('📁 Reports are saved to: claude_reports/ folder in your project directory', 'info');
+            showMessage('📁 Reports are saved to: chatgpt_reports/ folder in your project directory', 'info');
         }
         
         function showMessage(message, type) {
@@ -889,70 +714,72 @@ def help_page():
     
     html += """
             <div class="content-section">
-                <h2 class="section-title">📖 HDW User Guide - Enhanced Edition</h2>
+                <h2 class="section-title">📖 HDW User Guide</h2>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">🎯 What's New</h3>
-                <ul style="margin-left: 20px; line-height: 1.8;">
-                    <li><strong>Multi-Phase Support:</strong> Tasks organized by project phases</li>
-                    <li><strong>Phase Progress Tracking:</strong> Visual progress bars for each phase</li>
-                    <li><strong>Enhanced Dashboard:</strong> Phase overview with completion percentages</li>
-                    <li><strong>Better Task Organization:</strong> Tasks grouped by phase and status</li>
-                    <li><strong>Claude-Focused Reports:</strong> Handoff reports designed for Claude sessions</li>
-                </ul>
-                
-                <h3 style="color: #ffd700; margin-top: 25px;">🔄 Your Enhanced Workflow</h3>
+                <h3 style="color: #ffd700; margin-top: 25px;">🔄 Your Workflow</h3>
                 <ol style="margin-left: 20px; line-height: 2;">
-                    <li><strong>Check Dashboard</strong> - See phase progress at a glance</li>
-                    <li><strong>View Phases</strong> - Detailed phase breakdown and statistics</li>
-                    <li><strong>Go to Tasks</strong> - Tasks organized by phase</li>
-                    <li><strong>Click "🚀 Start Task"</strong> - Creates context file in contexts/phaseX/</li>
+                    <li><strong>Check Dashboard</strong> for project overview and statistics</li>
+                    <li><strong>Go to Tasks</strong> to start pending work</li>
+                    <li><strong>Click "🚀 Start Task"</strong> - creates context file for Claude</li>
                     <li><strong>Work with Claude</strong> using the generated context</li>
                     <li><strong>Click "✅ Complete Task"</strong> when done</li>
-                    <li><strong>Generate Claude Reports</strong> for session handoffs</li>
+                    <li><strong>Generate ChatGPT Reports</strong> to update project status</li>
                 </ol>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">📁 Phase Management</h3>
+                <h3 style="color: #ffd700; margin-top: 25px;">📊 Dashboard</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
-                    <li><strong>Phase Files:</strong> Each phase has its own YAML file in phases/</li>
-                    <li><strong>Legacy Tasks:</strong> Original tasks remain in tasks.yaml</li>
-                    <li><strong>Progress Tracking:</strong> Automatic calculation of completion %</li>
-                    <li><strong>Visual Indicators:</strong> Progress bars show phase status</li>
+                    <li>View real-time task statistics</li>
+                    <li>See recent activity and updates</li>
+                    <li>Quick access to all management functions</li>
+                    <li>Auto-refreshes every 2 minutes</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">📊 Dashboard Features</h3>
+                <h3 style="color: #ffd700; margin-top: 25px;">📋 Task Management</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
-                    <li>Real-time task statistics across all phases</li>
-                    <li>Phase progress overview with visual bars</li>
-                    <li>Recent activity feed shows phase information</li>
-                    <li>Quick access to phase-specific views</li>
+                    <li><strong>🚀 Start Task:</strong> Creates context file for Claude</li>
+                    <li><strong>✅ Complete Task:</strong> Marks as done and commits to git</li>
+                    <li><strong>🚫 Block Task:</strong> Mark as blocked with reason</li>
+                    <li><strong>📈 Generate Report:</strong> Create ChatGPT status update</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">💡 CLI Commands</h3>
-                <pre style="background: #333; padding: 15px; border-radius: 8px; color: #0f0;">
-# List all tasks grouped by phase
-python3 cli/hdw-task.py list
-
-# Show only Phase 1 tasks
-python3 cli/hdw-task.py list --phase 1
-
-# View phase progress
-python3 cli/hdw-task.py phases
-
-# See detailed status with phase info
-python3 cli/hdw-task.py status
-                </pre>
+                <h3 style="color: #ffd700; margin-top: 25px;">📈 ChatGPT Reports</h3>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li>Select any completed or in-progress task</li>
+                    <li>Add custom summary or use auto-generated one</li>
+                    <li>Report includes task status, summary, and artifacts</li>
+                    <li>Automatically saved with clear naming: <code>ChatGPT_Update_taskname_MMDD_HHMM.txt</code></li>
+                    <li>Copy and paste directly into ChatGPT</li>
+                </ul>
                 
                 <h3 style="color: #ffd700; margin-top: 25px;">🔧 Technical Details</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
-                    <li><strong>Context Files:</strong> Organized in contexts/phase1/, contexts/phase2/, etc.</li>
-                    <li><strong>Phase Files:</strong> Located in phases/*.yml</li>
-                    <li><strong>TaskManager:</strong> Enhanced src/task_manager.py handles multi-phase</li>
-                    <li><strong>Backward Compatible:</strong> Original tasks.yaml still works</li>
+                    <li><strong>Access:</strong> https://hdw.honey-duo.com (worldwide)</li>
+                    <li><strong>Security:</strong> HTTPS + login protection</li>
+                    <li><strong>Files:</strong> Reports saved to chatgpt_reports/ folder</li>
+                    <li><strong>Context:</strong> Task context files created in .task_context_*.md</li>
+                    <li><strong>Integration:</strong> Direct CLI integration for task management</li>
+                </ul>
+                
+                <h3 style="color: #ffd700; margin-top: 25px;">💡 Tips for Success</h3>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li>Always start tasks before working with Claude</li>
+                    <li>Use descriptive commit messages when completing tasks</li>
+                    <li>Generate reports regularly to keep ChatGPT updated</li>
+                    <li>Check the dashboard daily for project overview</li>
+                    <li>Block tasks immediately if you encounter issues</li>
+                </ul>
+                
+                <h3 style="color: #ffd700; margin-top: 25px;">🚨 Troubleshooting</h3>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>Tasks not loading:</strong> Check tasks.yaml file exists</li>
+                    <li><strong>Commands failing:</strong> Ensure CLI tools are working</li>
+                    <li><strong>Reports not saving:</strong> Check chatgpt_reports/ folder permissions</li>
+                    <li><strong>Interface slow:</strong> Use refresh buttons to reload data</li>
                 </ul>
                 
                 <div style="background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                    <h4 style="color: #ffd700;">🎯 Pro Tip: Phase Organization</h4>
-                    <p>Keep each phase focused on a specific goal. When a phase is complete, you can archive its file and start fresh with the next phase. This keeps your project organized and makes handoffs between Claude sessions seamless!</p>
+                    <h4 style="color: #ffd700;">🎯 Remember: This is YOUR Professional Interface</h4>
+                    <p>You now have a world-class project management system accessible from anywhere via your own domain. Use it to efficiently coordinate between ChatGPT (planning), Claude (coding), and yourself (integration).</p>
                 </div>
             </div>
         </div>
@@ -962,7 +789,7 @@ python3 cli/hdw-task.py status
     
     return html
 
-# API Endpoints remain mostly the same but use TaskManager
+# API Endpoints
 @app.route('/api/start_task', methods=['POST'])
 @requires_auth
 def start_task():
@@ -1015,9 +842,9 @@ def generate_report():
     if not task_id:
         return jsonify({"success": False, "error": "No task ID provided"})
     
-    # Find the task using TaskManager
-    tasks_data = task_manager.load_tasks()
-    task = next((t for t in tasks_data.get("tasks", []) if t['id'] == task_id), None)
+    # Find the task
+    tasks = load_tasks()
+    task = next((t for t in tasks if t['id'] == task_id), None)
     if not task:
         return jsonify({"success": False, "error": f"Task '{task_id}' not found"})
     
@@ -1039,40 +866,26 @@ def generate_report():
         artifacts = task.get("output", "No artifacts specified")
     
     status = task.get('status', 'pending').title()
-    phase_info = f"Phase {task.get('phase', 0)}: {task.get('phase_name', 'Legacy')}"
     
-    # Create Claude-focused report
-    report = f"""=== CLAUDE HANDOFF REPORT ===
-Task: {task_id}
-{phase_info}
+    # Create report
+    report = f"""Task: {task_id}
 Status: {status}
 Summary: "{summary}"
-Expected Output: {task.get('output', 'Not specified')}
-Artifacts: {artifacts}
-
-Context: This task is part of the Honey Duo Wealth project management system.
-Next Steps: Continue with remaining Phase {task.get('phase', 0)} tasks or begin next phase.
-==========================="""
+Artifacts: {artifacts}"""
     
     # Save to file
     timestamp = datetime.datetime.now().strftime('%m%d_%H%M')
-    reports_dir = PROJECT_ROOT / "claude_reports"
+    reports_dir = PROJECT_ROOT / "chatgpt_reports"
     reports_dir.mkdir(exist_ok=True)
     
-    filename = f"Claude_Handoff_{task_id}_{timestamp}.txt"
+    filename = f"ChatGPT_Update_{task_id}_{timestamp}.txt"
     report_file = reports_dir / filename
     
     with open(report_file, 'w') as f:
-        f.write(f"# Claude Handoff Report\n")
+        f.write(f"# ChatGPT Status Update\n")
         f.write(f"# Generated: {datetime.datetime.now().strftime('%A %B %d, %Y at %I:%M %p')}\n")
         f.write(f"# Task: {task_id}\n\n")
         f.write(report)
-        f.write(f"\n\n# Phase Progress:\n")
-        
-        # Add phase progress info
-        phase_progress = task_manager.get_phase_progress()
-        for phase_id, progress in phase_progress.items():
-            f.write(f"Phase {phase_id} ({progress['name']}): {progress['percentage']}% complete\n")
     
     return jsonify({
         "success": True, 
@@ -1083,19 +896,18 @@ Next Steps: Continue with remaining Phase {task.get('phase', 0)} tasks or begin 
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "domain": "hdw.honey-duo.com", "version": "2.0-phases"})
+    return jsonify({"status": "healthy", "domain": "hdw.honey-duo.com"})
 
 if __name__ == "__main__":
-    print("🌐 HDW Complete Management Interface - Phase Edition")
+    print("🌐 HDW Complete Management Interface Starting...")
     print("🔐 Access: https://hdw.honey-duo.com")
     print("🔑 Login: hdw / HoneyDuo2025!")
     print("")
-    print("💡 New Features:")
-    print("  📁 Phases - Multi-phase project organization")
-    print("  📊 Dashboard - Phase progress tracking")
-    print("  📋 Tasks - Grouped by phase")
-    print("  📈 Reports - Claude handoff reports")
-    print("  ❓ Help - Updated user guide")
+    print("💡 Features Available:")
+    print("  📊 Dashboard - Project overview and statistics")
+    print("  📋 Tasks - Complete task management")
+    print("  📈 Reports - ChatGPT status report generation")
+    print("  ❓ Help - Full user guide")
     print("")
-    print("🚀 Ready for phase-based project management!")
+    print("🚀 Ready for professional project management!")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)

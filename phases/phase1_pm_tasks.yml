@@ -52,7 +52,18 @@ tasks:
   - hdw_complete.py
   output: hdw_complete.py with phase views
   tests: tests/test_web_phases.py
-  status: pending
+  status: completed
+  updated: '2025-06-10T01:31:35.173644'
+  notes:
+  - timestamp: '2025-06-10T01:04:51.425553'
+    note: Task started
+  - timestamp: '2025-06-10T01:18:41.035855'
+    note: 'Blocked: UI Bugs'
+  - timestamp: '2025-06-10T01:24:12.344303'
+    note: 'Blocked: Testing if block reason saves'
+  - timestamp: '2025-06-10T01:31:35.173648'
+    note: 'Task committed: Implemented phase support in web UI - shows phase progress,
+      grouped tasks, and block reasons'
 - id: pm-decision-tracking
   description: Add 'why' tracking to task completion
   context:
