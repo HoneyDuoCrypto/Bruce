@@ -195,6 +195,9 @@ class HDWTaskManager:
             context_file.unlink()
         
         print(f"✅ Task {task_id} marked as completed")
+        
+        # Generate status report for ChatGPT
+        self.generate_chatgpt_report(task_id, "Completed")
     
     def cmd_block(self, task_id: str, reason: str):
         """Mark task as blocked"""
@@ -205,6 +208,48 @@ class HDWTaskManager:
         
         self.update_task_status(task_id, "blocked", f"Blocked: {reason}")
         print(f"🚫 Task {task_id} marked as blocked: {reason}")
+        
+        # Generate status report for ChatGPT
+        self.generate_chatgpt_report(task_id, "Blocked", f"Blocked: {reason}")
+    
+    def generate_chatgpt_report(self, task_id: str, status: str, summary: Optional[str] = None):
+        """Generate formatted status report for ChatGPT"""
+        task = self.find_task(task_id)
+        if not task:
+            return
+        
+        # Auto-generate summary if not provided
+        if not summary:
+            if status.lower() == "completed":
+                summary = f"Implemented {task.get('description', 'task requirements')}"
+            else:
+                summary = f"Working on {task.get('description', 'task')}"
+        
+        # Get recent git files as artifacts
+        try:
+            result = subprocess.run(
+                ["git", "show", "--name-only", "--pretty=format:", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root
+            )
+            recent_files = [f.strip() for f in result.stdout.strip().split('\n') if f.strip()]
+            artifacts = ", ".join(recent_files) if recent_files else "No files changed"
+        except:
+            artifacts = task.get("output", "No artifacts specified")
+        
+        # Generate the report
+        report = f"""Task: {task_id}
+Status: {status}
+Summary: "{summary}"
+Artifacts: {artifacts}"""
+        
+        print("\n" + "="*50)
+        print("📋 STATUS REPORT FOR CHATGPT")
+        print("="*50)
+        print(report)
+        print("="*50)
+        print("📋 Copy the above report and send it to ChatGPT\n")
 
 def main():
     parser = argparse.ArgumentParser(description="HDW Task Management CLI")
