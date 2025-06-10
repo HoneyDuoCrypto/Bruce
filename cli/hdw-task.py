@@ -1,255 +1,17 @@
 #!/usr/bin/env python3
 """
 HDW Task CLI - Honey Duo Wealth Task Management CLI
-Manages microtasks, context retrieval, and workflow coordination
+Enhanced with multi-phase support and better organization
 """
 
 import argparse
-import os
 import sys
-import yaml
-import json
-import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from datetime import datetime
 
-class HDWTaskManager:
-    def __init__(self, project_root: Optional[Path] = None):
-        self.project_root = project_root or Path.cwd()
-        self.tasks_file = self.project_root / "tasks.yaml"
-        self.docs_dir = self.project_root / "docs"
-        self.src_dir = self.project_root / "src"
-        self.tests_dir = self.project_root / "tests"
-        
-    def load_tasks(self) -> Dict[str, Any]:
-        """Load tasks from tasks.yaml"""
-        if not self.tasks_file.exists():
-            return {"tasks": []}
-        
-        with open(self.tasks_file, 'r') as f:
-            return yaml.safe_load(f)
-    
-    def save_tasks(self, tasks_data: Dict[str, Any]):
-        """Save tasks to tasks.yaml"""
-        with open(self.tasks_file, 'w') as f:
-            yaml.dump(tasks_data, f, default_flow_style=False, indent=2)
-    
-    def find_task(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Find a task by ID"""
-        tasks_data = self.load_tasks()
-        for task in tasks_data.get("tasks", []):
-            if task["id"] == task_id:
-                return task
-        return None
-    
-    def update_task_status(self, task_id: str, status: str, notes: Optional[str] = None):
-        """Update task status"""
-        tasks_data = self.load_tasks()
-        for task in tasks_data.get("tasks", []):
-            if task["id"] == task_id:
-                task["status"] = status
-                task["updated"] = datetime.now().isoformat()
-                if notes:
-                    if "notes" not in task:
-                        task["notes"] = []
-                    task["notes"].append({
-                        "timestamp": datetime.now().isoformat(),
-                        "note": notes
-                    })
-                break
-        self.save_tasks(tasks_data)
-    
-    def get_context(self, context_paths: List[str]) -> str:
-        """Retrieve context from specified documentation paths"""
-        context_content = []
-        
-        for path in context_paths:
-            file_path = self.docs_dir / path.replace("docs/", "")
-            if file_path.exists():
-                with open(file_path, 'r') as f:
-                    content = f.read()
-                    context_content.append(f"=== {path} ===\n{content}\n")
-            else:
-                context_content.append(f"=== {path} (NOT FOUND) ===\n")
-        
-        return "\n".join(context_content)
-    
-    def cmd_list(self, status_filter: Optional[str] = None):
-        """List all tasks, optionally filtered by status"""
-        tasks_data = self.load_tasks()
-        tasks = tasks_data.get("tasks", [])
-        
-        if status_filter:
-            tasks = [t for t in tasks if t.get("status") == status_filter]
-        
-        if not tasks:
-            print("No tasks found.")
-            return
-        
-        print(f"\n📋 Tasks ({len(tasks)}):")
-        print("-" * 80)
-        
-        for task in tasks:
-            status = task.get("status", "pending")
-            status_emoji = {
-                "pending": "⏳",
-                "in-progress": "🔄", 
-                "completed": "✅",
-                "blocked": "🚫"
-            }.get(status, "❓")
-            
-            print(f"{status_emoji} {task['id']:<20} {status:<12} {task.get('description', '')}")
-    
-    def cmd_status(self, task_id: Optional[str] = None):
-        """Show task status"""
-        if task_id:
-            task = self.find_task(task_id)
-            if not task:
-                print(f"❌ Task '{task_id}' not found")
-                return
-            
-            print(f"\n📄 Task: {task['id']}")
-            print(f"Status: {task.get('status', 'pending')}")
-            print(f"Description: {task.get('description', '')}")
-            print(f"Output: {task.get('output', '')}")
-            if task.get('context'):
-                print(f"Context: {', '.join(task['context'])}")
-            if task.get('updated'):
-                print(f"Updated: {task['updated']}")
-        else:
-            # Show overall project status
-            tasks_data = self.load_tasks()
-            tasks = tasks_data.get("tasks", [])
-            
-            status_counts = {}
-            for task in tasks:
-                status = task.get("status", "pending")
-                status_counts[status] = status_counts.get(status, 0) + 1
-            
-            print(f"\n📊 Project Status:")
-            for status, count in status_counts.items():
-                print(f"  {status}: {count}")
-    
-    def cmd_start(self, task_id: str):
-        """Start working on a task"""
-        task = self.find_task(task_id)
-        if not task:
-            print(f"❌ Task '{task_id}' not found")
-            return
-        
-        print(f"🚀 Starting task: {task_id}")
-        print(f"Description: {task['description']}")
-        
-        # Update status to in-progress
-        self.update_task_status(task_id, "in-progress", "Task started")
-        
-        # Get context for the task
-        if task.get("context"):
-            print(f"\n📚 Retrieving context...")
-            context = self.get_context(task["context"])
-            
-            # Save context to a temporary file for Claude
-            context_file = self.project_root / f".task_context_{task_id}.md"
-            with open(context_file, 'w') as f:
-                f.write(f"# Context for Task: {task_id}\n\n")
-                f.write(f"**Description:** {task['description']}\n\n")
-                f.write(f"**Expected Output:** {task.get('output', 'Not specified')}\n\n")
-                f.write("## Context Documentation:\n\n")
-                f.write(context)
-            
-            print(f"✓ Context saved to: {context_file}")
-        
-        print(f"\n📝 Task Requirements:")
-        print(f"  Output: {task.get('output', 'Not specified')}")
-        if task.get('tests'):
-            print(f"  Tests: {task['tests']}")
-        
-        print(f"\n💡 Ready for Claude implementation!")
-        print(f"   Use 'hdw-task commit {task_id}' when complete")
-    
-    def cmd_commit(self, task_id: str, message: Optional[str] = None):
-        """Commit completed task"""
-        task = self.find_task(task_id)
-        if not task:
-            print(f"❌ Task '{task_id}' not found")
-            return
-        
-        # Update status to completed
-        commit_message = message or f"Complete task: {task_id}"
-        self.update_task_status(task_id, "completed", f"Task committed: {commit_message}")
-        
-        # Git add and commit if in a git repository
-        try:
-            subprocess.run(["git", "add", "."], cwd=self.project_root, check=True)
-            subprocess.run(["git", "commit", "-m", commit_message], cwd=self.project_root, check=True)
-            print(f"✅ Task {task_id} committed to git")
-        except subprocess.CalledProcessError:
-            print(f"⚠️  Git commit failed (not in git repo?)")
-        except FileNotFoundError:
-            print(f"⚠️  Git not found")
-        
-        # Clean up context file
-        context_file = self.project_root / f".task_context_{task_id}.md"
-        if context_file.exists():
-            context_file.unlink()
-        
-        print(f"✅ Task {task_id} marked as completed")
-        
-        # Generate status report for ChatGPT
-        self.generate_chatgpt_report(task_id, "Completed")
-    
-    def cmd_block(self, task_id: str, reason: str):
-        """Mark task as blocked"""
-        task = self.find_task(task_id)
-        if not task:
-            print(f"❌ Task '{task_id}' not found")
-            return
-        
-        self.update_task_status(task_id, "blocked", f"Blocked: {reason}")
-        print(f"🚫 Task {task_id} marked as blocked: {reason}")
-        
-        # Generate status report for ChatGPT
-        self.generate_chatgpt_report(task_id, "Blocked", f"Blocked: {reason}")
-    
-    def generate_chatgpt_report(self, task_id: str, status: str, summary: Optional[str] = None):
-        """Generate formatted status report for ChatGPT"""
-        task = self.find_task(task_id)
-        if not task:
-            return
-        
-        # Auto-generate summary if not provided
-        if not summary:
-            if status.lower() == "completed":
-                summary = f"Implemented {task.get('description', 'task requirements')}"
-            else:
-                summary = f"Working on {task.get('description', 'task')}"
-        
-        # Get recent git files as artifacts
-        try:
-            result = subprocess.run(
-                ["git", "show", "--name-only", "--pretty=format:", "HEAD"],
-                capture_output=True,
-                text=True,
-                cwd=self.project_root
-            )
-            recent_files = [f.strip() for f in result.stdout.strip().split('\n') if f.strip()]
-            artifacts = ", ".join(recent_files) if recent_files else "No files changed"
-        except:
-            artifacts = task.get("output", "No artifacts specified")
-        
-        # Generate the report
-        report = f"""Task: {task_id}
-Status: {status}
-Summary: "{summary}"
-Artifacts: {artifacts}"""
-        
-        print("\n" + "="*50)
-        print("📋 STATUS REPORT FOR CHATGPT")
-        print("="*50)
-        print(report)
-        print("="*50)
-        print("📋 Copy the above report and send it to ChatGPT\n")
+# Add src to path to import TaskManager
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.task_manager import TaskManager
 
 def main():
     parser = argparse.ArgumentParser(description="HDW Task Management CLI")
@@ -260,6 +22,7 @@ def main():
     # List command
     list_parser = subparsers.add_parser("list", help="List tasks")
     list_parser.add_argument("--status", help="Filter by status")
+    list_parser.add_argument("--phase", type=int, help="Filter by phase")
     
     # Status command  
     status_parser = subparsers.add_parser("status", help="Show task status")
@@ -279,26 +42,263 @@ def main():
     block_parser.add_argument("task_id", help="Task ID to block")
     block_parser.add_argument("reason", help="Reason for blocking")
     
+    # Phase command (new!)
+    phase_parser = subparsers.add_parser("phases", help="Show phase progress")
+    
     args = parser.parse_args()
     
     if not args.command:
         parser.print_help()
         return
     
-    # Initialize task manager
-    task_manager = HDWTaskManager(args.project_root)
+    # Initialize enhanced task manager
+    task_manager = TaskManager(args.project_root)
     
-    # Execute command
+    # Execute commands using TaskManager methods
     if args.command == "list":
-        task_manager.cmd_list(args.status)
+        cmd_list_enhanced(task_manager, args.status, args.phase if hasattr(args, 'phase') else None)
     elif args.command == "status":
-        task_manager.cmd_status(args.task_id)
+        cmd_status_enhanced(task_manager, args.task_id)
     elif args.command == "start":
         task_manager.cmd_start(args.task_id)
     elif args.command == "commit":
-        task_manager.cmd_commit(args.task_id, args.message)
+        cmd_commit_enhanced(task_manager, args.task_id, args.message)
     elif args.command == "block":
-        task_manager.cmd_block(args.task_id, args.reason)
+        cmd_block_enhanced(task_manager, args.task_id, args.reason)
+    elif args.command == "phases":
+        cmd_phases(task_manager)
+
+def cmd_list_enhanced(tm: TaskManager, status_filter=None, phase_filter=None):
+    """Enhanced list command with phase support"""
+    tasks_data = tm.load_tasks()
+    tasks = tasks_data.get("tasks", [])
+    
+    # Apply filters
+    if status_filter:
+        tasks = [t for t in tasks if t.get("status") == status_filter]
+    if phase_filter is not None:
+        tasks = [t for t in tasks if t.get("phase", 0) == phase_filter]
+    
+    if not tasks:
+        print("No tasks found.")
+        return
+    
+    # Group by phase
+    tasks_by_phase = {}
+    for task in tasks:
+        phase = task.get("phase", 0)
+        if phase not in tasks_by_phase:
+            tasks_by_phase[phase] = []
+        tasks_by_phase[phase].append(task)
+    
+    # Display tasks grouped by phase
+    for phase in sorted(tasks_by_phase.keys()):
+        phase_tasks = tasks_by_phase[phase]
+        phase_info = tasks_data.get("phases", {}).get(str(phase), {})
+        phase_name = phase_info.get("name", "Legacy Tasks" if phase == 0 else f"Phase {phase}")
+        
+        print(f"\n📋 {phase_name} ({len(phase_tasks)} tasks):")
+        print("-" * 80)
+        
+        for task in phase_tasks:
+            status = task.get("status", "pending")
+            status_emoji = {
+                "pending": "⏳",
+                "in-progress": "🔄", 
+                "completed": "✅",
+                "blocked": "🚫"
+            }.get(status, "❓")
+            
+            print(f"{status_emoji} {task['id']:<20} {status:<12} {task.get('description', '')}")
+
+def cmd_status_enhanced(tm: TaskManager, task_id=None):
+    """Enhanced status command with phase progress"""
+    if task_id:
+        # Show specific task details
+        tasks_data = tm.load_tasks()
+        task = None
+        for t in tasks_data.get("tasks", []):
+            if t["id"] == task_id:
+                task = t
+                break
+        
+        if not task:
+            print(f"❌ Task '{task_id}' not found")
+            return
+        
+        print(f"\n📄 Task: {task['id']}")
+        print(f"Phase: {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}")
+        print(f"Status: {task.get('status', 'pending')}")
+        print(f"Description: {task.get('description', '')}")
+        print(f"Output: {task.get('output', '')}")
+        if task.get('context'):
+            print(f"Context: {', '.join(task['context'])}")
+        if task.get('acceptance_criteria'):
+            print("Acceptance Criteria:")
+            for criteria in task['acceptance_criteria']:
+                print(f"  - {criteria}")
+        if task.get('updated'):
+            print(f"Updated: {task['updated']}")
+    else:
+        # Show overall project status with phase breakdown
+        tasks_data = tm.load_tasks()
+        tasks = tasks_data.get("tasks", [])
+        
+        print(f"\n📊 Project Status:")
+        print("-" * 50)
+        
+        # Overall stats
+        status_counts = {}
+        for task in tasks:
+            status = task.get("status", "pending")
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        for status, count in status_counts.items():
+            print(f"  {status}: {count}")
+        
+        # Phase progress
+        phase_progress = tm.get_phase_progress()
+        if phase_progress:
+            print(f"\n📈 Phase Progress:")
+            print("-" * 50)
+            for phase_id in sorted(phase_progress.keys()):
+                progress = phase_progress[phase_id]
+                bar_length = 20
+                filled = int(bar_length * progress["percentage"] / 100)
+                bar = "█" * filled + "░" * (bar_length - filled)
+                
+                print(f"Phase {phase_id}: {progress['name']}")
+                print(f"  [{bar}] {progress['percentage']}% ({progress['completed']}/{progress['total']})")
+
+def cmd_commit_enhanced(tm: TaskManager, task_id: str, message=None):
+    """Enhanced commit with proper task updates"""
+    import subprocess
+    from datetime import datetime
+    
+    # Find task to get current data
+    tasks_data = tm.load_tasks()
+    task = None
+    for t in tasks_data.get("tasks", []):
+        if t["id"] == task_id:
+            task = t
+            break
+    
+    if not task:
+        print(f"❌ Task '{task_id}' not found")
+        return
+    
+    # Update task
+    commit_message = message or f"Complete task: {task_id}"
+    updates = {
+        "status": "completed",
+        "updated": datetime.now().isoformat(),
+        "notes": task.get("notes", []) + [{
+            "timestamp": datetime.now().isoformat(),
+            "note": f"Task committed: {commit_message}"
+        }]
+    }
+    
+    tm.save_task_updates(task_id, updates)
+    
+    # Git operations
+    try:
+        subprocess.run(["git", "add", "."], cwd=tm.project_root, check=True)
+        subprocess.run(["git", "commit", "-m", commit_message], cwd=tm.project_root, check=True)
+        print(f"✅ Task {task_id} committed to git")
+    except subprocess.CalledProcessError:
+        print(f"⚠️  Git commit failed (not in git repo?)")
+    except FileNotFoundError:
+        print(f"⚠️  Git not found")
+    
+    # Clean up context file
+    for context_dir in tm.contexts_dir.glob("phase*"):
+        context_file = context_dir / f"context_{task_id}.md"
+        if context_file.exists():
+            context_file.unlink()
+            break
+    
+    # Also check old location for backward compatibility
+    old_context_file = tm.project_root / f".task_context_{task_id}.md"
+    if old_context_file.exists():
+        old_context_file.unlink()
+    
+    print(f"✅ Task {task_id} marked as completed")
+    
+    # Generate report
+    generate_claude_report(task, "Completed", commit_message)
+
+def cmd_block_enhanced(tm: TaskManager, task_id: str, reason: str):
+    """Enhanced block command"""
+    from datetime import datetime
+    
+    # Find task
+    tasks_data = tm.load_tasks()
+    task = None
+    for t in tasks_data.get("tasks", []):
+        if t["id"] == task_id:
+            task = t
+            break
+    
+    if not task:
+        print(f"❌ Task '{task_id}' not found")
+        return
+    
+    # Update task
+    updates = {
+        "status": "blocked",
+        "updated": datetime.now().isoformat(),
+        "notes": task.get("notes", []) + [{
+            "timestamp": datetime.now().isoformat(),
+            "note": f"Blocked: {reason}"
+        }]
+    }
+    
+    tm.save_task_updates(task_id, updates)
+    print(f"🚫 Task {task_id} marked as blocked: {reason}")
+    
+    # Generate report
+    generate_claude_report(task, "Blocked", f"Blocked: {reason}")
+
+def cmd_phases(tm: TaskManager):
+    """Show detailed phase progress"""
+    phase_progress = tm.get_phase_progress()
+    tasks_data = tm.load_tasks()
+    
+    print("\n📊 Phase Overview")
+    print("=" * 60)
+    
+    for phase_id in sorted(phase_progress.keys()):
+        progress = phase_progress[phase_id]
+        phase_info = tasks_data.get("phases", {}).get(str(phase_id), {})
+        
+        # Progress bar
+        bar_length = 30
+        filled = int(bar_length * progress["percentage"] / 100)
+        bar = "█" * filled + "░" * (bar_length - filled)
+        
+        print(f"\n📁 Phase {phase_id}: {progress['name']}")
+        if phase_info.get("description"):
+            print(f"   {phase_info['description']}")
+        
+        print(f"\n   Progress: [{bar}] {progress['percentage']}%")
+        print(f"   Tasks: {progress['completed']} completed, {progress['in_progress']} in progress, {progress['pending']} pending")
+        
+        if progress["blocked"] > 0:
+            print(f"   ⚠️  Blocked: {progress['blocked']} tasks")
+
+def generate_claude_report(task, status, summary):
+    """Generate a report for Claude (replacing ChatGPT report)"""
+    print("\n" + "="*50)
+    print("📋 STATUS REPORT FOR CLAUDE HANDOFF")
+    print("="*50)
+    print(f"Task: {task['id']}")
+    print(f"Phase: {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}")
+    print(f"Status: {status}")
+    print(f"Summary: {summary}")
+    if task.get("output"):
+        print(f"Expected Output: {task['output']}")
+    print("="*50)
+    print("📋 Save this for session handoff\n")
 
 if __name__ == "__main__":
     main()

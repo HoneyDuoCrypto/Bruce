@@ -1,0 +1,4 @@
+Task: hello-world
+Status: Completed
+Summary: "Implemented Create a simple hello world function"
+Artifacts: cli/hdw-task.py, status_report.py, tasks.yaml

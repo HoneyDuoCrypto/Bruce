@@ -1,0 +1,68 @@
+phase:
+  id: 1
+  name: Project Management System
+  description: Complete PM system for seamless Claude handoffs
+tasks:
+- id: pm-multi-phase
+  description: Update task manager to load from phases/*.yml files
+  context:
+  - cli/hdw-task.py
+  - tasks.yaml
+  output: src/task_manager.py with multi-file support
+  tests: tests/test_multi_phase.py
+  status: completed
+  notes:
+  - note: Task started
+    timestamp: '2025-06-10T00:34:19.524514'
+  - note: Task started
+    timestamp: '2025-06-10T00:50:04.765231'
+  - timestamp: '2025-06-10T01:01:07.409026'
+    note: 'Task committed: Implemented multi-phase task management with tests'
+  updated: '2025-06-10T01:01:07.409022'
+  acceptance_criteria:
+  - Loads tasks from phases/*.yml
+  - Maintains backward compatibility with tasks.yaml
+  - Organizes context files by phase
+- id: pm-phase-progress
+  description: Add phase progress calculation and display
+  context:
+  - cli/hdw-task.py#cmd_status
+  output: Progress tracking per phase
+  tests: tests/test_phase_progress.py
+  status: pending
+- id: pm-blueprint-gen
+  description: Auto-generate blueprint from completed tasks
+  context:
+  - docs/blueprints/phase1_pm_system.md
+  output: src/blueprint_generator.py
+  tests: tests/test_blueprint_gen.py
+  status: pending
+- id: pm-session-handoff
+  description: Generate comprehensive handoff for new sessions
+  context:
+  - cli/hdw-task.py#generate_chatgpt_report
+  output: src/session_handoff.py
+  tests: tests/test_session_handoff.py
+  status: pending
+- id: pm-web-phases
+  description: Update web UI to show phase-based progress
+  context:
+  - hdw_complete.py
+  output: hdw_complete.py with phase views
+  tests: tests/test_web_phases.py
+  status: pending
+- id: pm-decision-tracking
+  description: Add 'why' tracking to task completion
+  context:
+  - hdw_complete.py#complete_task
+  - cli/hdw-task.py#cmd_commit
+  output: Enhanced completion with decision capture
+  tests: tests/test_decision_tracking.py
+  status: pending
+- id: pm-context-enhance
+  description: Include related tasks and decisions in context
+  context:
+  - cli/hdw-task.py#get_context
+  output: Enhanced context generator
+  tests: tests/test_context_enhance.py
+  status: pending
