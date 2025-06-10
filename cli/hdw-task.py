@@ -226,6 +226,24 @@ def cmd_commit_enhanced(tm: TaskManager, task_id: str, message=None):
     
     # Generate report
     generate_claude_report(task, "Completed", commit_message)
+    
+    # Auto-generate blueprint documentation
+    try:
+        from src.blueprint_generator import BlueprintGenerator
+        generator = BlueprintGenerator(tm.project_root)
+        blueprint_results = generator.auto_generate_on_completion(task_id)
+        
+        if blueprint_results and "error" not in blueprint_results:
+            print("\n📋 Auto-generated blueprints:")
+            for doc_type, filepath in blueprint_results.items():
+                print(f"  ✅ {doc_type}: {Path(filepath).name}")
+        elif blueprint_results and "error" in blueprint_results:
+            print(f"\n⚠️  Blueprint generation warning: {blueprint_results['error']}")
+    except ImportError:
+        print("\n⚠️  Blueprint generator not available (src/blueprint_generator.py not found)")
+    except Exception as e:
+        print(f"\n⚠️  Blueprint generation failed: {e}")
+        # Don't fail task completion if blueprint generation fails
 
 def cmd_block_enhanced(tm: TaskManager, task_id: str, reason: str):
     """Enhanced block command"""
