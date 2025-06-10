@@ -1,0 +1,15 @@
+tasks:
+- context:
+  - docs/vision.md
+  description: Initialize project directories and placeholder files
+  id: scaffold-repo
+  output: 'Empty dirs: docs/, src/, cli/, pipelines/, infra/, tests/'
+  status: completed
+  tests: null
+- context:
+  - cli/README.md
+  description: 'Implement CLI commands: start, status, commit-hook integration'
+  id: cli-prototype
+  output: Executable hdw-task script with basic command parsing
+  status: in-progress
+  tests: tests/test_cli.py
