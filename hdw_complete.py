@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Honey Duo Wealth Complete Management Interface
+Bruce Complete Management Interface
 Enhanced with multi-phase support, progress tracking, Blueprint Generator UI, Enhanced Context,
 AND NEW: Dynamic Task/Phase Management UI
 """
@@ -20,9 +20,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src.task_manager import TaskManager
 
 app = Flask(__name__)
-app.secret_key = 'hdw-honey-duo-2025-secure'
+app.secret_key = 'bruce-project-2025-secure'
 
-# Authentication
+# Authentication (keeping original for now)
 VALID_USERS = {
     'hdw': 'HoneyDuo2025!',
     'admin': 'AdminPass123!'
@@ -33,9 +33,9 @@ def check_auth(username, password):
 
 def authenticate():
     return make_response(
-        '🔐 HDW Access Required\nLogin required for Honey Duo Wealth Management',
+        '🔐 Bruce Access Required\nLogin required for Bruce Project Management',
         401,
-        {'WWW-Authenticate': 'Basic realm="HDW Management Interface"'}
+        {'WWW-Authenticate': 'Basic realm="Bruce Management Interface"'}
     )
 
 def requires_auth(f):
@@ -62,14 +62,14 @@ def run_cli_command(command):
         return {"success": False, "output": "", "error": str(e)}
 
 def get_base_html(title, active_page="dashboard"):
-    """Get base HTML template with enhanced styling for phases"""
+    """Get base HTML template with Bruce branding"""
     return f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{title} - HDW Management</title>
+        <title>{title} - Bruce Management</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{ 
@@ -83,11 +83,11 @@ def get_base_html(title, active_page="dashboard"):
             .header {{ 
                 background: linear-gradient(135deg, #2b2b2b 0%, #1a1a1a 100%);
                 padding: 30px 0; 
-                border-bottom: 3px solid #ffd700;
+                border-bottom: 3px solid #00d4aa;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             }}
             .header h1 {{ 
-                color: #ffd700; 
+                color: #00d4aa; 
                 text-align: center; 
                 font-size: 2.5em;
                 text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
@@ -116,10 +116,10 @@ def get_base_html(title, active_page="dashboard"):
                 font-weight: 500;
             }}
             .nav a:hover, .nav a.active {{ 
-                background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+                background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%);
                 color: #000; 
                 transform: translateY(-2px);
-                box-shadow: 0 4px 15px rgba(255,215,0,0.3);
+                box-shadow: 0 4px 15px rgba(0,212,170,0.3);
             }}
             .content-section {{ 
                 background: rgba(43, 43, 43, 0.8);
@@ -131,10 +131,10 @@ def get_base_html(title, active_page="dashboard"):
                 box-shadow: 0 8px 25px rgba(0,0,0,0.2);
             }}
             .section-title {{ 
-                color: #ffd700; 
+                color: #00d4aa; 
                 margin-bottom: 20px; 
                 font-size: 1.5em;
-                border-bottom: 2px solid #ffd700;
+                border-bottom: 2px solid #00d4aa;
                 padding-bottom: 10px;
             }}
             .btn {{ 
@@ -153,7 +153,7 @@ def get_base_html(title, active_page="dashboard"):
                 transform: translateY(-2px); 
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             }}
-            .btn-primary {{ background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%); color: #000; }}
+            .btn-primary {{ background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%); color: #000; }}
             .btn-success {{ background: linear-gradient(135deg, #00cc00 0%, #009900 100%); color: white; }}
             .btn-info {{ background: linear-gradient(135deg, #0066cc 0%, #004499 100%); color: white; }}
             .btn-danger {{ background: linear-gradient(135deg, #cc0000 0%, #990000 100%); color: white; }}
@@ -167,7 +167,7 @@ def get_base_html(title, active_page="dashboard"):
                 margin: 15px 0; 
                 background: rgba(51, 51, 51, 0.8);
                 border-radius: 10px;
-                border-left: 4px solid #ffd700;
+                border-left: 4px solid #00d4aa;
                 transition: all 0.3s ease;
             }}
             .task-item:hover {{
@@ -182,7 +182,7 @@ def get_base_html(title, active_page="dashboard"):
             .form-group label {{ 
                 display: block; 
                 margin-bottom: 8px; 
-                color: #ffd700; 
+                color: #00d4aa; 
                 font-weight: bold;
             }}
             .form-group select, .form-group textarea, .form-group input {{
@@ -197,8 +197,8 @@ def get_base_html(title, active_page="dashboard"):
             }}
             .form-group select:focus, .form-group textarea:focus, .form-group input:focus {{
                 outline: none;
-                border-color: #ffd700;
-                box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2);
+                border-color: #00d4aa;
+                box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
             }}
             .form-row {{ 
                 display: grid; 
@@ -219,7 +219,7 @@ def get_base_html(title, active_page="dashboard"):
                 white-space: pre-wrap;
                 min-height: 300px; 
                 margin: 20px 0;
-                border: 2px solid #ffd700;
+                border: 2px solid #00d4aa;
                 font-size: 13px;
                 line-height: 1.4;
                 overflow-y: auto;
@@ -235,16 +235,16 @@ def get_base_html(title, active_page="dashboard"):
                 background: rgba(30, 30, 30, 0.8);
                 border-radius: 12px;
                 padding: 20px;
-                border: 1px solid rgba(255, 215, 0, 0.3);
+                border: 1px solid rgba(0, 212, 170, 0.3);
                 transition: all 0.3s ease;
             }}
             .generator-card:hover {{
-                border-color: #ffd700;
+                border-color: #00d4aa;
                 transform: translateY(-5px);
-                box-shadow: 0 10px 30px rgba(255, 215, 0, 0.2);
+                box-shadow: 0 10px 30px rgba(0, 212, 170, 0.2);
             }}
             .card-title {{
-                color: #ffd700;
+                color: #00d4aa;
                 font-size: 1.3em;
                 font-weight: bold;
                 margin-bottom: 15px;
@@ -306,7 +306,7 @@ def get_base_html(title, active_page="dashboard"):
                 padding: 20px;
                 background: rgba(30, 30, 30, 0.5);
                 border-radius: 12px;
-                border: 1px solid rgba(255, 215, 0, 0.2);
+                border: 1px solid rgba(0, 212, 170, 0.2);
             }}
             .phase-header {{
                 display: flex;
@@ -316,7 +316,7 @@ def get_base_html(title, active_page="dashboard"):
             }}
             .phase-title {{
                 font-size: 1.3em;
-                color: #ffd700;
+                color: #00d4aa;
                 font-weight: bold;
             }}
             .phase-progress {{
@@ -334,7 +334,7 @@ def get_base_html(title, active_page="dashboard"):
             }}
             .progress-fill {{
                 height: 100%;
-                background: linear-gradient(90deg, #ffd700 0%, #ffed4e 100%);
+                background: linear-gradient(90deg, #00d4aa 0%, #00b894 100%);
                 transition: width 0.3s ease;
             }}
             .progress-text {{
@@ -356,7 +356,7 @@ def get_base_html(title, active_page="dashboard"):
                 background-color: #2b2b2b;
                 margin: 5% auto;
                 padding: 20px;
-                border: 2px solid #ffd700;
+                border: 2px solid #00d4aa;
                 border-radius: 10px;
                 width: 80%;
                 max-width: 800px;
@@ -365,21 +365,21 @@ def get_base_html(title, active_page="dashboard"):
                 color: #fff;
             }}
             .close {{
-                color: #ffd700;
+                color: #00d4aa;
                 float: right;
                 font-size: 28px;
                 font-weight: bold;
                 cursor: pointer;
             }}
             .close:hover {{
-                color: #ffed4e;
+                color: #00b894;
             }}
             .checkbox-container {{
                 margin: 15px 0;
                 padding: 15px;
-                background: rgba(255, 215, 0, 0.1);
+                background: rgba(0, 212, 170, 0.1);
                 border-radius: 8px;
-                border: 1px solid rgba(255, 215, 0, 0.3);
+                border: 1px solid rgba(0, 212, 170, 0.3);
             }}
             .checkbox-container label {{
                 display: flex;
@@ -404,7 +404,7 @@ def get_base_html(title, active_page="dashboard"):
                 margin: 5px 0;
                 background: rgba(51, 51, 51, 0.8);
                 border-radius: 5px;
-                border-left: 3px solid #ffd700;
+                border-left: 3px solid #00d4aa;
             }}
             /* NEW: Management form styles */
             .management-tabs {{
@@ -422,9 +422,9 @@ def get_base_html(title, active_page="dashboard"):
                 transition: all 0.3s ease;
             }}
             .tab.active {{
-                background: rgba(255, 215, 0, 0.1);
-                color: #ffd700;
-                border-bottom-color: #ffd700;
+                background: rgba(0, 212, 170, 0.1);
+                color: #00d4aa;
+                border-bottom-color: #00d4aa;
             }}
             .tab-content {{
                 display: none;
@@ -442,7 +442,7 @@ def get_base_html(title, active_page="dashboard"):
                 border-radius: 8px;
                 padding: 20px;
                 margin: 15px 0;
-                border: 1px solid rgba(255, 215, 0, 0.2);
+                border: 1px solid rgba(0, 212, 170, 0.2);
             }}
             .field-row {{
                 display: flex;
@@ -493,8 +493,8 @@ def get_base_html(title, active_page="dashboard"):
     <body>
         <div class="header">
             <div class="container">
-                <h1>🍯 Honey Duo Wealth</h1>
-                <div class="domain-badge">🌐 Professional Project Management • hdw.honey-duo.com</div>
+                <h1>🤖 Bruce</h1>
+                <div class="domain-badge">🌐 AI Project Assistant • bruce.honey-duo.com</div>
                 <div class="nav">
                     <a href="/" class="{'active' if active_page == 'dashboard' else ''}">📊 Dashboard</a>
                     <a href="/tasks" class="{'active' if active_page == 'tasks' else ''}">📋 Tasks</a>
@@ -532,7 +532,7 @@ def manage():
                 
                 <!-- Add Task Tab -->
                 <div id="add-task" class="tab-content active">
-                    <h3 style="color: #ffd700; margin-bottom: 20px;">➕ Add New Task</h3>
+                    <h3 style="color: #00d4aa; margin-bottom: 20px;">➕ Add New Task</h3>
                     
                     <form id="add-task-form">
                         <div class="form-row">
@@ -573,7 +573,7 @@ def manage():
                         </div>
                         
                         <div class="dynamic-fields">
-                            <label style="color: #ffd700; font-weight: bold;">Context Files:</label>
+                            <label style="color: #00d4aa; font-weight: bold;">Context Files:</label>
                             <div id="context-fields">
                                 <div class="field-row">
                                     <input type="text" placeholder="e.g., docs/architecture.md">
@@ -584,7 +584,7 @@ def manage():
                         </div>
                         
                         <div class="dynamic-fields">
-                            <label style="color: #ffd700; font-weight: bold;">Dependencies:</label>
+                            <label style="color: #00d4aa; font-weight: bold;">Dependencies:</label>
                             <div id="dependency-fields">
                                 <div class="field-row">
                                     <input type="text" placeholder="e.g., other-task-id">
@@ -595,7 +595,7 @@ def manage():
                         </div>
                         
                         <div class="dynamic-fields">
-                            <label style="color: #ffd700; font-weight: bold;">Acceptance Criteria:</label>
+                            <label style="color: #00d4aa; font-weight: bold;">Acceptance Criteria:</label>
                             <div id="criteria-fields">
                                 <div class="field-row">
                                     <input type="text" placeholder="e.g., Handles 1000+ requests per second">
@@ -614,7 +614,7 @@ def manage():
                 
                 <!-- Add Phase Tab -->
                 <div id="add-phase" class="tab-content">
-                    <h3 style="color: #ffd700; margin-bottom: 20px;">📁 Add New Phase</h3>
+                    <h3 style="color: #00d4aa; margin-bottom: 20px;">📁 Add New Phase</h3>
                     
                     <form id="add-phase-form">
                         <div class="form-row-thirds">
@@ -642,7 +642,7 @@ def manage():
                 
                 <!-- Edit Task Tab -->
                 <div id="edit-task" class="tab-content">
-                    <h3 style="color: #ffd700; margin-bottom: 20px;">✏️ Edit Existing Task</h3>
+                    <h3 style="color: #00d4aa; margin-bottom: 20px;">✏️ Edit Existing Task</h3>
                     
                     <div class="form-group">
                         <label for="edit-task-select">Select Task to Edit:</label>
@@ -690,19 +690,19 @@ def manage():
                         </div>
                         
                         <div class="dynamic-fields">
-                            <label style="color: #ffd700; font-weight: bold;">Context Files:</label>
+                            <label style="color: #00d4aa; font-weight: bold;">Context Files:</label>
                             <div id="edit-context-fields"></div>
                             <button type="button" class="add-btn" onclick="addEditContextField()">➕ Add Context File</button>
                         </div>
                         
                         <div class="dynamic-fields">
-                            <label style="color: #ffd700; font-weight: bold;">Dependencies:</label>
+                            <label style="color: #00d4aa; font-weight: bold;">Dependencies:</label>
                             <div id="edit-dependency-fields"></div>
                             <button type="button" class="add-btn" onclick="addEditDependencyField()">➕ Add Dependency</button>
                         </div>
                         
                         <div class="dynamic-fields">
-                            <label style="color: #ffd700; font-weight: bold;">Acceptance Criteria:</label>
+                            <label style="color: #00d4aa; font-weight: bold;">Acceptance Criteria:</label>
                             <div id="edit-criteria-fields"></div>
                             <button type="button" class="add-btn" onclick="addEditCriteriaField()">➕ Add Criteria</button>
                         </div>
@@ -1336,7 +1336,7 @@ def tasks():
                 task_list = tasks_by_phase[phase_id][status]
                 if task_list:
                     emoji, label = status_info[status]
-                    html += f'<h4 style="color: #ffd700; margin: 20px 0 10px 0;">{emoji} {label} ({len(task_list)})</h4>'
+                    html += f'<h4 style="color: #00d4aa; margin: 20px 0 10px 0;">{emoji} {label} ({len(task_list)})</h4>'
                     
                     for task in task_list:
                         updated = task.get('updated', '')
@@ -1415,7 +1415,7 @@ def tasks():
         <script>
         function showStartDialog(taskId) {
             const modalContent = `
-                <h2 style="color: #ffd700; margin-bottom: 20px;">🚀 Start Task: ${taskId}</h2>
+                <h2 style="color: #00d4aa; margin-bottom: 20px;">🚀 Start Task: ${taskId}</h2>
                 <div class="checkbox-container">
                     <label>
                         <input type="checkbox" id="useEnhanced" checked>
@@ -1474,7 +1474,7 @@ def tasks():
                 .then(response => response.json())
                 .then(data => {
                     const modalContent = `
-                        <h2 style="color: #ffd700;">📄 Context Preview: ${taskId}</h2>
+                        <h2 style="color: #00d4aa;">📄 Context Preview: ${taskId}</h2>
                         <div class="report-area" style="max-height: 500px;">
                             ${data.context.replace(/\\n/g, '\\n')}
                         </div>
@@ -1495,7 +1495,7 @@ def tasks():
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('previewArea').innerHTML = `
-                        <h3 style="color: #ffd700;">Preview:</h3>
+                        <h3 style="color: #00d4aa;">Preview:</h3>
                         <div class="report-area" style="max-height: 300px;">
                             ${data.context.replace(/\\n/g, '\\n')}
                         </div>
@@ -1510,7 +1510,7 @@ def tasks():
             fetch(`/api/related_tasks/${taskId}`)
                 .then(response => response.json())
                 .then(data => {
-                    let relatedHtml = '<h3 style="color: #ffd700;">🔗 Related Tasks</h3>';
+                    let relatedHtml = '<h3 style="color: #00d4aa;">🔗 Related Tasks</h3>';
                     
                     if (data.related_tasks && data.related_tasks.length > 0) {
                         relatedHtml += '<div class="related-tasks">';
@@ -1637,7 +1637,7 @@ def phases():
                         <div class="progress-bar" style="width: 300px;">
                             <div class="progress-fill" style="width: {progress['percentage']}%"></div>
                         </div>
-                        <div class="progress-text" style="font-size: 18px; color: #ffd700;">{progress['percentage']:.0f}%</div>
+                        <div class="progress-text" style="font-size: 18px; color: #00d4aa;">{progress['percentage']:.0f}%</div>
                     </div>
                 </div>
                 
@@ -2011,9 +2011,9 @@ def help_page():
     
     html += """
             <div class="content-section">
-                <h2 class="section-title">📖 HDW User Guide - Enhanced Edition</h2>
+                <h2 class="section-title">📖 Bruce User Guide - Enhanced Edition</h2>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">🎯 What's New</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">🎯 What's New</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>Task/Phase Management:</strong> Add and edit tasks and phases through web UI</li>
                     <li><strong>Enhanced Context:</strong> Rich context with related tasks and architecture</li>
@@ -2024,7 +2024,7 @@ def help_page():
                     <li><strong>Session Handoffs:</strong> Complete context preservation for Claude sessions</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">⚙️ New Management Features</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">⚙️ New Management Features</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>Add Tasks:</strong> Create new tasks with full configuration via web interface</li>
                     <li><strong>Add Phases:</strong> Create new project phases to organize work</li>
@@ -2033,7 +2033,7 @@ def help_page():
                     <li><strong>Form Validation:</strong> Built-in validation ensures proper task creation</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">✨ Enhanced Context Features</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">✨ Enhanced Context Features</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>Architecture Diagrams:</strong> Shows where your task fits in the system</li>
                     <li><strong>Related Tasks:</strong> Automatically finds and displays related completed work</li>
@@ -2042,7 +2042,7 @@ def help_page():
                     <li><strong>Toggle Option:</strong> Choose between enhanced or basic context</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">🏗️ Blueprint Generator Features</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">🏗️ Blueprint Generator Features</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>Phase Blueprints:</strong> Complete technical overview with tasks and architecture</li>
                     <li><strong>Session Handoffs:</strong> Everything needed for Claude session continuity</li>
@@ -2050,7 +2050,7 @@ def help_page():
                     <li><strong>Document Management:</strong> Auto-saving with one source of truth per phase</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">🔄 Enhanced Workflow</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">🔄 Enhanced Workflow</h3>
                 <ol style="margin-left: 20px; line-height: 2;">
                     <li><strong>Check Dashboard</strong> - See phase progress at a glance</li>
                     <li><strong>Manage Tasks/Phases</strong> - Add new phases and tasks as needed</li>
@@ -2061,7 +2061,7 @@ def help_page():
                     <li><strong>Generate Reports</strong> - Quick Claude handoff reports</li>
                 </ol>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">📁 Page Overview</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">📁 Page Overview</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>📊 Dashboard:</strong> Project overview and phase progress</li>
                     <li><strong>📋 Tasks:</strong> Phase-organized task management with enhanced context</li>
@@ -2072,7 +2072,7 @@ def help_page():
                     <li><strong>❓ Help:</strong> This user guide</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">⚙️ Management Page Usage</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">⚙️ Management Page Usage</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>Add Task:</strong> Create new tasks with phase, description, output, dependencies, etc.</li>
                     <li><strong>Add Phase:</strong> Create new project phases to organize future work</li>
@@ -2080,7 +2080,7 @@ def help_page():
                     <li><strong>Dynamic Fields:</strong> Add/remove context files, dependencies, and acceptance criteria as needed</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">🏗️ Generator Page Usage</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">🏗️ Generator Page Usage</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
                     <li><strong>Phase Blueprint:</strong> Generate complete technical documentation for a phase</li>
                     <li><strong>Session Handoff:</strong> Create comprehensive handoff for Claude sessions</li>
@@ -2088,7 +2088,7 @@ def help_page():
                     <li><strong>Copy/Download:</strong> Easy sharing and preservation of generated documents</li>
                 </ul>
                 
-                <h3 style="color: #ffd700; margin-top: 25px;">💡 CLI Commands</h3>
+                <h3 style="color: #00d4aa; margin-top: 25px;">💡 CLI Commands</h3>
                 <pre style="background: #333; padding: 15px; border-radius: 8px; color: #0f0;">
 # Start task with enhanced context (default)
 python3 cli/hdw-task.py start task-id
@@ -2115,13 +2115,13 @@ python3 cli/hdw-task.py phases
 python3 src/blueprint_generator.py update --phase-id 1
                 </pre>
                 
-                <div style="background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                    <h4 style="color: #ffd700;">🎯 Pro Tip: Enhanced Context</h4>
+                <div style="background: rgba(0, 212, 170, 0.1); border: 1px solid #00d4aa; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                    <h4 style="color: #00d4aa;">🎯 Pro Tip: Enhanced Context</h4>
                     <p>The enhanced context feature automatically finds related tasks, shows where you're working in the system architecture, and includes relevant decisions from completed work. This creates perfect continuity between Claude sessions!</p>
                 </div>
                 
-                <div style="background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                    <h4 style="color: #ffd700;">⚙️ Pro Tip: Management Interface</h4>
+                <div style="background: rgba(0, 212, 170, 0.1); border: 1px solid #00d4aa; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                    <h4 style="color: #00d4aa;">⚙️ Pro Tip: Management Interface</h4>
                     <p>Use the Management page to quickly scaffold new phases and tasks for complex projects like trading bots. The web interface makes it easy to set up multiple tasks with proper dependencies and acceptance criteria.</p>
                 </div>
             </div>
@@ -2345,7 +2345,7 @@ Summary: "{summary}"
 Expected Output: {task.get('output', 'Not specified')}
 Artifacts: {artifacts}
 
-Context: This task is part of the Honey Duo Wealth project management system.
+Context: This task is part of the Bruce project management system.
 Next Steps: Continue with remaining Phase {task.get('phase', 0)} tasks or begin next phase.
 ==========================="""
     
@@ -2378,11 +2378,11 @@ Next Steps: Continue with remaining Phase {task.get('phase', 0)} tasks or begin 
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "domain": "hdw.honey-duo.com", "version": "4.0-complete-management"})
+    return jsonify({"status": "healthy", "domain": "bruce.honey-duo.com", "version": "1.0-bruce-portable"})
 
 if __name__ == "__main__":
-    print("🌐 HDW Complete Management Interface - Enhanced with Dynamic Management")
-    print("🔐 Access: https://hdw.honey-duo.com")
+    print("🌐 Bruce Complete Management Interface - Enhanced with Dynamic Management")
+    print("🔐 Access: https://bruce.honey-duo.com")
     print("🔑 Login: hdw / HoneyDuo2025!")
     print("")
     print("💡 New Features:")

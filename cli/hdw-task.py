@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-HDW Task CLI - Enhanced with Dynamic Task/Phase Management
+Bruce Task CLI - Enhanced with Dynamic Task/Phase Management
 Enhanced with multi-phase support and enhanced context generation
 Plus new commands: add-task, add-phase, edit-task
-Save as: cli/hdw-task.py
+Save as: cli/bruce-task.py
 """
 
 import argparse
@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.task_manager import TaskManager
 
 def main():
-    parser = argparse.ArgumentParser(description="HDW Task Management CLI")
+    parser = argparse.ArgumentParser(description="Bruce Project Management CLI")
     parser.add_argument("--project-root", type=Path, help="Project root directory")
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -192,7 +192,7 @@ def cmd_add_phase(tm: TaskManager, args):
     print(f"✅ Created new phase {args.id}: {args.name}")
     print(f"📁 File: {phase_filename}")
     print(f"📝 Description: {args.description}")
-    print(f"💡 Add tasks with: hdw-task add-task --phase {args.id} --id <task-id> --description '<description>'")
+    print(f"💡 Add tasks with: bruce-task add-task --phase {args.id} --id <task-id> --description '<description>'")
 
 def cmd_edit_task(tm: TaskManager, args):
     """Edit an existing task"""
@@ -318,7 +318,7 @@ def find_phase_file(tm: TaskManager, phase_id: int) -> Optional[Path]:
             continue
     return None
 
-# EXISTING COMMAND FUNCTIONS (unchanged)
+# EXISTING COMMAND FUNCTIONS
 
 def cmd_list_enhanced(tm: TaskManager, status_filter=None, phase_filter=None):
     """Enhanced list command with phase support"""
