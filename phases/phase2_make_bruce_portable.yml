@@ -1,0 +1,25 @@
+phase:
+  id: 2
+  name: Make Bruce Portable
+  description: Transform HDW system into portable Bruce
+tasks:
+- id: bruce-branding
+  description: Rebrand everything from HDW to Bruce
+  status: pending
+  output: All UI/CLI showing Bruce branding
+- id: bruce-config
+  description: Create bruce.yaml config system
+  status: pending
+  output: Config loader and bruce.yaml format
+- id: bruce-init
+  description: Create 'bruce init' command
+  status: pending
+  output: Command that sets up Bruce in any directory
+- id: relative-paths
+  description: Make all paths project-relative
+  status: pending
+  output: Updated path handling throughout
+- id: blueprint-import
+  description: Build blueprint and the build import feature
+  status: pending
+  output: UI and API for importing phase designs

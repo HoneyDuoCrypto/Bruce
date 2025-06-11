@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-HDW Task CLI - Honey Duo Wealth Task Management CLI
+HDW Task CLI - Enhanced with Dynamic Task/Phase Management
 Enhanced with multi-phase support and enhanced context generation
+Plus new commands: add-task, add-phase, edit-task
 Save as: cli/hdw-task.py
 """
 
 import argparse
 import sys
+import yaml
 from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Optional, Any
 
 # Add src to path to import TaskManager
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,33 +24,56 @@ def main():
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
-    # List command
+    # Existing commands
     list_parser = subparsers.add_parser("list", help="List tasks")
     list_parser.add_argument("--status", help="Filter by status")
     list_parser.add_argument("--phase", type=int, help="Filter by phase")
     
-    # Status command  
     status_parser = subparsers.add_parser("status", help="Show task status")
     status_parser.add_argument("task_id", nargs="?", help="Specific task ID")
     
-    # Start command - UPDATED with --basic flag
     start_parser = subparsers.add_parser("start", help="Start a task")
     start_parser.add_argument("task_id", help="Task ID to start")
     start_parser.add_argument("--basic", action="store_true", 
                             help="Use basic context instead of enhanced (default: enhanced)")
     
-    # Commit command
     commit_parser = subparsers.add_parser("commit", help="Commit completed task")
     commit_parser.add_argument("task_id", help="Task ID to commit")
     commit_parser.add_argument("--message", help="Commit message")
     
-    # Block command
     block_parser = subparsers.add_parser("block", help="Mark task as blocked")
     block_parser.add_argument("task_id", help="Task ID to block")
     block_parser.add_argument("reason", help="Reason for blocking")
     
-    # Phase command
     phase_parser = subparsers.add_parser("phases", help="Show phase progress")
+    
+    # NEW COMMANDS
+    # Add task command
+    add_task_parser = subparsers.add_parser("add-task", help="Add new task to phase")
+    add_task_parser.add_argument("--phase", type=int, required=True, help="Phase ID")
+    add_task_parser.add_argument("--id", required=True, help="Task ID")
+    add_task_parser.add_argument("--description", required=True, help="Task description")
+    add_task_parser.add_argument("--output", help="Expected output")
+    add_task_parser.add_argument("--context", nargs="*", help="Context files")
+    add_task_parser.add_argument("--tests", help="Test file")
+    add_task_parser.add_argument("--depends-on", nargs="*", help="Task dependencies")
+    add_task_parser.add_argument("--acceptance-criteria", nargs="*", help="Acceptance criteria")
+    
+    # Add phase command
+    add_phase_parser = subparsers.add_parser("add-phase", help="Add new phase")
+    add_phase_parser.add_argument("--id", type=int, required=True, help="Phase ID")
+    add_phase_parser.add_argument("--name", required=True, help="Phase name")
+    add_phase_parser.add_argument("--description", required=True, help="Phase description")
+    
+    # Edit task command
+    edit_task_parser = subparsers.add_parser("edit-task", help="Edit existing task")
+    edit_task_parser.add_argument("--id", required=True, help="Task ID to edit")
+    edit_task_parser.add_argument("--description", help="New description")
+    edit_task_parser.add_argument("--output", help="New expected output")
+    edit_task_parser.add_argument("--context", nargs="*", help="New context files")
+    edit_task_parser.add_argument("--tests", help="New test file")
+    edit_task_parser.add_argument("--depends-on", nargs="*", help="New dependencies")
+    edit_task_parser.add_argument("--acceptance-criteria", nargs="*", help="New acceptance criteria")
     
     args = parser.parse_args()
     
@@ -63,7 +90,6 @@ def main():
     elif args.command == "status":
         cmd_status_enhanced(task_manager, args.task_id)
     elif args.command == "start":
-        # UPDATED to use enhanced context by default
         task_manager.cmd_start(args.task_id, enhanced=not args.basic)
     elif args.command == "commit":
         cmd_commit_enhanced(task_manager, args.task_id, args.message)
@@ -71,6 +97,228 @@ def main():
         cmd_block_enhanced(task_manager, args.task_id, args.reason)
     elif args.command == "phases":
         cmd_phases(task_manager)
+    # NEW COMMAND HANDLERS
+    elif args.command == "add-task":
+        cmd_add_task(task_manager, args)
+    elif args.command == "add-phase":
+        cmd_add_phase(task_manager, args)
+    elif args.command == "edit-task":
+        cmd_edit_task(task_manager, args)
+
+# NEW COMMAND FUNCTIONS
+
+def cmd_add_task(tm: TaskManager, args):
+    """Add a new task to an existing phase"""
+    
+    # Check if task ID already exists
+    tasks_data = tm.load_tasks()
+    existing_task = next((t for t in tasks_data.get("tasks", []) if t["id"] == args.id), None)
+    if existing_task:
+        print(f"❌ Task '{args.id}' already exists")
+        return
+    
+    # Find the phase file
+    phase_file = find_phase_file(tm, args.phase)
+    if not phase_file:
+        print(f"❌ Phase {args.phase} not found. Create it first with 'add-phase'")
+        return
+    
+    # Create new task
+    new_task = {
+        "id": args.id,
+        "description": args.description,
+        "status": "pending"
+    }
+    
+    # Add optional fields
+    if args.output:
+        new_task["output"] = args.output
+    if args.context:
+        new_task["context"] = args.context
+    if args.tests:
+        new_task["tests"] = args.tests
+    if args.depends_on:
+        new_task["depends_on"] = args.depends_on
+    if args.acceptance_criteria:
+        new_task["acceptance_criteria"] = args.acceptance_criteria
+    
+    # Load existing phase data
+    with open(phase_file, 'r') as f:
+        phase_data = yaml.safe_load(f)
+    
+    # Add task to phase
+    if "tasks" not in phase_data:
+        phase_data["tasks"] = []
+    
+    phase_data["tasks"].append(new_task)
+    
+    # Save updated phase file
+    with open(phase_file, 'w') as f:
+        yaml.dump(phase_data, f, default_flow_style=False, indent=2, sort_keys=False)
+    
+    print(f"✅ Added task '{args.id}' to phase {args.phase}")
+    print(f"📁 File: {phase_file.name}")
+    print(f"📝 Description: {args.description}")
+
+def cmd_add_phase(tm: TaskManager, args):
+    """Add a new phase"""
+    
+    # Check if phase already exists
+    existing_file = find_phase_file(tm, args.id)
+    if existing_file:
+        print(f"❌ Phase {args.id} already exists: {existing_file.name}")
+        return
+    
+    # Create new phase file
+    # Format: phase{id}_{name_snake_case}.yml
+    safe_name = args.name.lower().replace(" ", "_").replace("-", "_")
+    phase_filename = f"phase{args.id}_{safe_name}.yml"
+    phase_file = tm.phases_dir / phase_filename
+    
+    # Create phase data structure
+    phase_data = {
+        "phase": {
+            "id": args.id,
+            "name": args.name,
+            "description": args.description
+        },
+        "tasks": []
+    }
+    
+    # Save phase file
+    with open(phase_file, 'w') as f:
+        yaml.dump(phase_data, f, default_flow_style=False, indent=2, sort_keys=False)
+    
+    print(f"✅ Created new phase {args.id}: {args.name}")
+    print(f"📁 File: {phase_filename}")
+    print(f"📝 Description: {args.description}")
+    print(f"💡 Add tasks with: hdw-task add-task --phase {args.id} --id <task-id> --description '<description>'")
+
+def cmd_edit_task(tm: TaskManager, args):
+    """Edit an existing task"""
+    
+    # Find the task
+    tasks_data = tm.load_tasks()
+    task = None
+    for t in tasks_data.get("tasks", []):
+        if t["id"] == args.id:
+            task = t
+            break
+    
+    if not task:
+        print(f"❌ Task '{args.id}' not found")
+        return
+    
+    # Determine which file contains this task
+    phase_id = task.get("phase", 0)
+    
+    if phase_id == 0:
+        # Legacy task in tasks.yaml
+        edit_legacy_task(tm, args, task)
+    else:
+        # Task in phase file
+        edit_phase_task(tm, args, task, phase_id)
+
+def edit_legacy_task(tm: TaskManager, args, task):
+    """Edit task in legacy tasks.yaml"""
+    
+    # Load tasks.yaml
+    with open(tm.tasks_file, 'r') as f:
+        tasks_data = yaml.safe_load(f) or {"tasks": []}
+    
+    # Find and update the task
+    for i, t in enumerate(tasks_data["tasks"]):
+        if t["id"] == args.id:
+            # Update fields that were provided
+            if args.description:
+                t["description"] = args.description
+                print(f"✓ Updated description")
+            if args.output:
+                t["output"] = args.output
+                print(f"✓ Updated output")
+            if args.context is not None:
+                t["context"] = args.context
+                print(f"✓ Updated context")
+            if args.tests:
+                t["tests"] = args.tests
+                print(f"✓ Updated tests")
+            if args.depends_on is not None:
+                t["depends_on"] = args.depends_on
+                print(f"✓ Updated dependencies")
+            if args.acceptance_criteria is not None:
+                t["acceptance_criteria"] = args.acceptance_criteria
+                print(f"✓ Updated acceptance criteria")
+            
+            # Add update timestamp
+            t["updated"] = datetime.now().isoformat()
+            break
+    
+    # Save updated file
+    with open(tm.tasks_file, 'w') as f:
+        yaml.dump(tasks_data, f, default_flow_style=False, indent=2, sort_keys=False)
+    
+    print(f"✅ Updated task '{args.id}' in {tm.tasks_file.name}")
+
+def edit_phase_task(tm: TaskManager, args, task, phase_id):
+    """Edit task in phase file"""
+    
+    # Find phase file
+    phase_file = find_phase_file(tm, phase_id)
+    if not phase_file:
+        print(f"❌ Could not find phase file for phase {phase_id}")
+        return
+    
+    # Load phase data
+    with open(phase_file, 'r') as f:
+        phase_data = yaml.safe_load(f)
+    
+    # Find and update the task
+    for i, t in enumerate(phase_data.get("tasks", [])):
+        if t["id"] == args.id:
+            # Update fields that were provided
+            if args.description:
+                t["description"] = args.description
+                print(f"✓ Updated description")
+            if args.output:
+                t["output"] = args.output
+                print(f"✓ Updated output")
+            if args.context is not None:
+                t["context"] = args.context
+                print(f"✓ Updated context")
+            if args.tests:
+                t["tests"] = args.tests
+                print(f"✓ Updated tests")
+            if args.depends_on is not None:
+                t["depends_on"] = args.depends_on
+                print(f"✓ Updated dependencies")
+            if args.acceptance_criteria is not None:
+                t["acceptance_criteria"] = args.acceptance_criteria
+                print(f"✓ Updated acceptance criteria")
+            
+            # Add update timestamp
+            t["updated"] = datetime.now().isoformat()
+            break
+    
+    # Save updated file
+    with open(phase_file, 'w') as f:
+        yaml.dump(phase_data, f, default_flow_style=False, indent=2, sort_keys=False)
+    
+    print(f"✅ Updated task '{args.id}' in {phase_file.name}")
+
+def find_phase_file(tm: TaskManager, phase_id: int) -> Optional[Path]:
+    """Find the phase file for a given phase ID"""
+    for phase_file in tm.phases_dir.glob(f"phase{phase_id}_*.yml"):
+        # Verify this is the right phase by checking content
+        try:
+            with open(phase_file, 'r') as f:
+                phase_data = yaml.safe_load(f)
+                if phase_data.get("phase", {}).get("id") == phase_id:
+                    return phase_file
+        except Exception:
+            continue
+    return None
+
+# EXISTING COMMAND FUNCTIONS (unchanged)
 
 def cmd_list_enhanced(tm: TaskManager, status_filter=None, phase_filter=None):
     """Enhanced list command with phase support"""
@@ -231,7 +479,7 @@ def cmd_commit_enhanced(tm: TaskManager, task_id: str, message=None):
     # Generate report
     generate_claude_report(task, "Completed", commit_message)
     
-    # Auto-generate blueprint documentation - UPDATED import
+    # Auto-generate blueprint documentation
     try:
         from src.blueprint_generator import PhaseBlueprintGenerator
         generator = PhaseBlueprintGenerator(tm.project_root)
@@ -247,7 +495,6 @@ def cmd_commit_enhanced(tm: TaskManager, task_id: str, message=None):
         print("\n⚠️  Blueprint generator not available (src/blueprint_generator.py not found)")
     except Exception as e:
         print(f"\n⚠️  Blueprint generation failed: {e}")
-        # Don't fail task completion if blueprint generation fails
 
 def cmd_block_enhanced(tm: TaskManager, task_id: str, reason: str):
     """Enhanced block command"""

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Honey Duo Wealth Complete Management Interface
-Enhanced with multi-phase support, progress tracking, Blueprint Generator UI, and Enhanced Context
+Enhanced with multi-phase support, progress tracking, Blueprint Generator UI, Enhanced Context,
+AND NEW: Dynamic Task/Phase Management UI
 """
 
 from flask import Flask, request, jsonify, make_response, redirect, url_for
@@ -199,6 +200,16 @@ def get_base_html(title, active_page="dashboard"):
                 border-color: #ffd700;
                 box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2);
             }}
+            .form-row {{ 
+                display: grid; 
+                grid-template-columns: 1fr 1fr; 
+                gap: 20px; 
+            }}
+            .form-row-thirds {{ 
+                display: grid; 
+                grid-template-columns: 1fr 1fr 1fr; 
+                gap: 15px; 
+            }}
             .report-area {{ 
                 background: #1a1a1a; 
                 color: #ffffff; 
@@ -395,6 +406,77 @@ def get_base_html(title, active_page="dashboard"):
                 border-radius: 5px;
                 border-left: 3px solid #ffd700;
             }}
+            /* NEW: Management form styles */
+            .management-tabs {{
+                display: flex;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #333;
+            }}
+            .tab {{
+                padding: 15px 25px;
+                background: rgba(51, 51, 51, 0.8);
+                color: #ccc;
+                cursor: pointer;
+                border: none;
+                border-bottom: 3px solid transparent;
+                transition: all 0.3s ease;
+            }}
+            .tab.active {{
+                background: rgba(255, 215, 0, 0.1);
+                color: #ffd700;
+                border-bottom-color: #ffd700;
+            }}
+            .tab-content {{
+                display: none;
+                animation: fadeIn 0.3s ease;
+            }}
+            .tab-content.active {{
+                display: block;
+            }}
+            @keyframes fadeIn {{
+                from {{ opacity: 0; transform: translateY(10px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+            .dynamic-fields {{
+                background: rgba(30, 30, 30, 0.8);
+                border-radius: 8px;
+                padding: 20px;
+                margin: 15px 0;
+                border: 1px solid rgba(255, 215, 0, 0.2);
+            }}
+            .field-row {{
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                margin: 10px 0;
+            }}
+            .field-row input {{
+                flex: 1;
+                padding: 8px 12px;
+                background: #333;
+                border: 1px solid #555;
+                border-radius: 6px;
+                color: #fff;
+            }}
+            .remove-btn {{
+                background: #cc0000;
+                color: white;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+            }}
+            .add-btn {{
+                background: #00cc00;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                margin-top: 10px;
+            }}
             @media (max-width: 768px) {{
                 .task-item {{ flex-direction: column; align-items: flex-start; }}
                 .task-actions {{ margin-top: 15px; width: 100%; }}
@@ -402,6 +484,9 @@ def get_base_html(title, active_page="dashboard"):
                 .nav a {{ padding: 8px 16px; font-size: 14px; }}
                 .progress-bar {{ width: 150px; }}
                 .generator-grid {{ grid-template-columns: 1fr; }}
+                .form-row {{ grid-template-columns: 1fr; }}
+                .form-row-thirds {{ grid-template-columns: 1fr; }}
+                .management-tabs {{ flex-wrap: wrap; }}
             }}
         </style>
     </head>
@@ -414,6 +499,7 @@ def get_base_html(title, active_page="dashboard"):
                     <a href="/" class="{'active' if active_page == 'dashboard' else ''}">📊 Dashboard</a>
                     <a href="/tasks" class="{'active' if active_page == 'tasks' else ''}">📋 Tasks</a>
                     <a href="/phases" class="{'active' if active_page == 'phases' else ''}">📁 Phases</a>
+                    <a href="/manage" class="{'active' if active_page == 'manage' else ''}">⚙️ Manage</a>
                     <a href="/generator" class="{'active' if active_page == 'generator' else ''}">🏗️ Generator</a>
                     <a href="/reports" class="{'active' if active_page == 'reports' else ''}">📈 Reports</a>
                     <a href="/help" class="{'active' if active_page == 'help' else ''}">❓ Help</a>
@@ -424,9 +510,640 @@ def get_base_html(title, active_page="dashboard"):
         <div class="container">
     """
 
+# NEW PAGE: Management interface for adding/editing tasks and phases
+@app.route('/manage')
+@requires_auth
+def manage():
+    tasks_data = task_manager.load_tasks()
+    phase_progress = task_manager.get_phase_progress()
+    
+    html = get_base_html("Task & Phase Management", "manage")
+    
+    html += """
+            <div class="content-section">
+                <h2 class="section-title">⚙️ Task & Phase Management</h2>
+                <p style="color: #ccc; margin-bottom: 20px;">Add new phases, create tasks, and edit existing items</p>
+                
+                <div class="management-tabs">
+                    <button class="tab active" onclick="switchTab('add-task')">➕ Add Task</button>
+                    <button class="tab" onclick="switchTab('add-phase')">📁 Add Phase</button>
+                    <button class="tab" onclick="switchTab('edit-task')">✏️ Edit Task</button>
+                </div>
+                
+                <!-- Add Task Tab -->
+                <div id="add-task" class="tab-content active">
+                    <h3 style="color: #ffd700; margin-bottom: 20px;">➕ Add New Task</h3>
+                    
+                    <form id="add-task-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="task-phase">Phase:</label>
+                                <select id="task-phase" required>
+                                    <option value="">Select Phase...</option>
+    """
+    
+    # Add phase options
+    for phase_id in sorted(phase_progress.keys()):
+        progress = phase_progress[phase_id]
+        html += f'<option value="{phase_id}">Phase {phase_id}: {progress["name"]}</option>'
+    
+    html += """
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="task-id">Task ID:</label>
+                                <input type="text" id="task-id" required placeholder="e.g., trading-engine-core">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="task-description">Description:</label>
+                            <textarea id="task-description" rows="3" required placeholder="What needs to be implemented?"></textarea>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="task-output">Expected Output:</label>
+                                <input type="text" id="task-output" placeholder="e.g., src/trading_engine.py with core functionality">
+                            </div>
+                            <div class="form-group">
+                                <label for="task-tests">Test File:</label>
+                                <input type="text" id="task-tests" placeholder="e.g., tests/test_trading_engine.py">
+                            </div>
+                        </div>
+                        
+                        <div class="dynamic-fields">
+                            <label style="color: #ffd700; font-weight: bold;">Context Files:</label>
+                            <div id="context-fields">
+                                <div class="field-row">
+                                    <input type="text" placeholder="e.g., docs/architecture.md">
+                                    <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                                </div>
+                            </div>
+                            <button type="button" class="add-btn" onclick="addContextField()">➕ Add Context File</button>
+                        </div>
+                        
+                        <div class="dynamic-fields">
+                            <label style="color: #ffd700; font-weight: bold;">Dependencies:</label>
+                            <div id="dependency-fields">
+                                <div class="field-row">
+                                    <input type="text" placeholder="e.g., other-task-id">
+                                    <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                                </div>
+                            </div>
+                            <button type="button" class="add-btn" onclick="addDependencyField()">➕ Add Dependency</button>
+                        </div>
+                        
+                        <div class="dynamic-fields">
+                            <label style="color: #ffd700; font-weight: bold;">Acceptance Criteria:</label>
+                            <div id="criteria-fields">
+                                <div class="field-row">
+                                    <input type="text" placeholder="e.g., Handles 1000+ requests per second">
+                                    <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                                </div>
+                            </div>
+                            <button type="button" class="add-btn" onclick="addCriteriaField()">➕ Add Criteria</button>
+                        </div>
+                        
+                        <div style="margin-top: 30px; text-align: center;">
+                            <button type="submit" class="btn btn-primary" style="font-size: 16px; padding: 15px 30px;">➕ Create Task</button>
+                            <button type="button" class="btn btn-secondary" onclick="clearForm('add-task-form')">🧹 Clear Form</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Add Phase Tab -->
+                <div id="add-phase" class="tab-content">
+                    <h3 style="color: #ffd700; margin-bottom: 20px;">📁 Add New Phase</h3>
+                    
+                    <form id="add-phase-form">
+                        <div class="form-row-thirds">
+                            <div class="form-group">
+                                <label for="phase-id">Phase ID:</label>
+                                <input type="number" id="phase-id" required min="1" placeholder="e.g., 2">
+                            </div>
+                            <div class="form-group">
+                                <label for="phase-name">Phase Name:</label>
+                                <input type="text" id="phase-name" required placeholder="e.g., Trading Bot Core">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="phase-description">Phase Description:</label>
+                            <textarea id="phase-description" rows="4" required placeholder="What will this phase accomplish?"></textarea>
+                        </div>
+                        
+                        <div style="margin-top: 30px; text-align: center;">
+                            <button type="submit" class="btn btn-success" style="font-size: 16px; padding: 15px 30px;">📁 Create Phase</button>
+                            <button type="button" class="btn btn-secondary" onclick="clearForm('add-phase-form')">🧹 Clear Form</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Edit Task Tab -->
+                <div id="edit-task" class="tab-content">
+                    <h3 style="color: #ffd700; margin-bottom: 20px;">✏️ Edit Existing Task</h3>
+                    
+                    <div class="form-group">
+                        <label for="edit-task-select">Select Task to Edit:</label>
+                        <select id="edit-task-select" onchange="loadTaskForEdit()">
+                            <option value="">Choose a task...</option>
+    """
+    
+    # Add task options grouped by phase
+    tasks_by_phase = {}
+    for task in tasks_data.get("tasks", []):
+        phase = task.get('phase', 0)
+        if phase not in tasks_by_phase:
+            tasks_by_phase[phase] = []
+        tasks_by_phase[phase].append(task)
+    
+    for phase_id in sorted(tasks_by_phase.keys()):
+        phase_name = f"Phase {phase_id}" if phase_id > 0 else "Legacy"
+        html += f'<optgroup label="{phase_name}">'
+        
+        for task in tasks_by_phase[phase_id]:
+            status_icon = {'pending': '⏳', 'in-progress': '🔄', 'completed': '✅', 'blocked': '🚫'}.get(task.get('status'), '❓')
+            html += f'<option value="{task["id"]}">{status_icon} {task["id"]} - {task.get("description", "")[:50]}</option>'
+        
+        html += '</optgroup>'
+    
+    html += """
+                        </select>
+                    </div>
+                    
+                    <form id="edit-task-form" style="display: none;">
+                        <div class="form-group">
+                            <label for="edit-task-description">Description:</label>
+                            <textarea id="edit-task-description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-task-output">Expected Output:</label>
+                                <input type="text" id="edit-task-output">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-task-tests">Test File:</label>
+                                <input type="text" id="edit-task-tests">
+                            </div>
+                        </div>
+                        
+                        <div class="dynamic-fields">
+                            <label style="color: #ffd700; font-weight: bold;">Context Files:</label>
+                            <div id="edit-context-fields"></div>
+                            <button type="button" class="add-btn" onclick="addEditContextField()">➕ Add Context File</button>
+                        </div>
+                        
+                        <div class="dynamic-fields">
+                            <label style="color: #ffd700; font-weight: bold;">Dependencies:</label>
+                            <div id="edit-dependency-fields"></div>
+                            <button type="button" class="add-btn" onclick="addEditDependencyField()">➕ Add Dependency</button>
+                        </div>
+                        
+                        <div class="dynamic-fields">
+                            <label style="color: #ffd700; font-weight: bold;">Acceptance Criteria:</label>
+                            <div id="edit-criteria-fields"></div>
+                            <button type="button" class="add-btn" onclick="addEditCriteriaField()">➕ Add Criteria</button>
+                        </div>
+                        
+                        <div style="margin-top: 30px; text-align: center;">
+                            <button type="submit" class="btn btn-warning" style="font-size: 16px; padding: 15px 30px;">✏️ Update Task</button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelEdit()">❌ Cancel</button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div id="status-message" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+        
+        <script>
+        let allTasks = """ + json.dumps(tasks_data.get("tasks", [])) + """;
+        
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+        }
+        
+        function addContextField() {
+            const container = document.getElementById('context-fields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <input type="text" placeholder="e.g., docs/architecture.md">
+                <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+            `;
+            container.appendChild(div);
+        }
+        
+        function addDependencyField() {
+            const container = document.getElementById('dependency-fields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <input type="text" placeholder="e.g., other-task-id">
+                <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+            `;
+            container.appendChild(div);
+        }
+        
+        function addCriteriaField() {
+            const container = document.getElementById('criteria-fields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <input type="text" placeholder="e.g., Handles 1000+ requests per second">
+                <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+            `;
+            container.appendChild(div);
+        }
+        
+        function addEditContextField() {
+            const container = document.getElementById('edit-context-fields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <input type="text" placeholder="e.g., docs/architecture.md">
+                <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+            `;
+            container.appendChild(div);
+        }
+        
+        function addEditDependencyField() {
+            const container = document.getElementById('edit-dependency-fields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <input type="text" placeholder="e.g., other-task-id">
+                <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+            `;
+            container.appendChild(div);
+        }
+        
+        function addEditCriteriaField() {
+            const container = document.getElementById('edit-criteria-fields');
+            const div = document.createElement('div');
+            div.className = 'field-row';
+            div.innerHTML = `
+                <input type="text" placeholder="e.g., Handles 1000+ requests per second">
+                <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+            `;
+            container.appendChild(div);
+        }
+        
+        function removeField(button) {
+            button.parentElement.remove();
+        }
+        
+        function collectFieldValues(containerId) {
+            const container = document.getElementById(containerId);
+            const inputs = container.querySelectorAll('input[type="text"]');
+            const values = [];
+            inputs.forEach(input => {
+                if (input.value.trim()) {
+                    values.push(input.value.trim());
+                }
+            });
+            return values;
+        }
+        
+        function clearForm(formId) {
+            document.getElementById(formId).reset();
+            // Clear dynamic fields
+            if (formId === 'add-task-form') {
+                document.getElementById('context-fields').innerHTML = `
+                    <div class="field-row">
+                        <input type="text" placeholder="e.g., docs/architecture.md">
+                        <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                    </div>
+                `;
+                document.getElementById('dependency-fields').innerHTML = `
+                    <div class="field-row">
+                        <input type="text" placeholder="e.g., other-task-id">
+                        <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                    </div>
+                `;
+                document.getElementById('criteria-fields').innerHTML = `
+                    <div class="field-row">
+                        <input type="text" placeholder="e.g., Handles 1000+ requests per second">
+                        <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                    </div>
+                `;
+            }
+        }
+        
+        function loadTaskForEdit() {
+            const taskId = document.getElementById('edit-task-select').value;
+            const form = document.getElementById('edit-task-form');
+            
+            if (!taskId) {
+                form.style.display = 'none';
+                return;
+            }
+            
+            const task = allTasks.find(t => t.id === taskId);
+            if (!task) {
+                showMessage('Task not found', 'error');
+                return;
+            }
+            
+            // Populate form fields
+            document.getElementById('edit-task-description').value = task.description || '';
+            document.getElementById('edit-task-output').value = task.output || '';
+            document.getElementById('edit-task-tests').value = task.tests || '';
+            
+            // Populate dynamic fields
+            populateEditFields('edit-context-fields', task.context || [], 'docs/architecture.md');
+            populateEditFields('edit-dependency-fields', task.depends_on || [], 'other-task-id');
+            populateEditFields('edit-criteria-fields', task.acceptance_criteria || [], 'Handles 1000+ requests per second');
+            
+            form.style.display = 'block';
+        }
+        
+        function populateEditFields(containerId, values, placeholder) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            if (values.length === 0) {
+                values = [''];
+            }
+            
+            values.forEach(value => {
+                const div = document.createElement('div');
+                div.className = 'field-row';
+                div.innerHTML = `
+                    <input type="text" value="${value}" placeholder="e.g., ${placeholder}">
+                    <button type="button" class="remove-btn" onclick="removeField(this)">✖</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+        
+        function cancelEdit() {
+            document.getElementById('edit-task-select').value = '';
+            document.getElementById('edit-task-form').style.display = 'none';
+        }
+        
+        function showMessage(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.innerHTML = `<div class="status-message status-${type}">${message}</div>`;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 5000);
+            }
+        }
+        
+        // Form submissions
+        document.getElementById('add-task-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                phase: parseInt(document.getElementById('task-phase').value),
+                id: document.getElementById('task-id').value,
+                description: document.getElementById('task-description').value,
+                output: document.getElementById('task-output').value,
+                tests: document.getElementById('task-tests').value,
+                context: collectFieldValues('context-fields'),
+                depends_on: collectFieldValues('dependency-fields'),
+                acceptance_criteria: collectFieldValues('criteria-fields')
+            };
+            
+            if (!formData.phase || !formData.id || !formData.description) {
+                showMessage('Please fill in required fields (Phase, ID, Description)', 'error');
+                return;
+            }
+            
+            fetch('/api/add_task', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(`✅ Task '${formData.id}' created successfully!`, 'success');
+                    clearForm('add-task-form');
+                } else {
+                    showMessage(`❌ Error: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage(`❌ Network error: ${error}`, 'error');
+            });
+        });
+        
+        document.getElementById('add-phase-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                id: parseInt(document.getElementById('phase-id').value),
+                name: document.getElementById('phase-name').value,
+                description: document.getElementById('phase-description').value
+            };
+            
+            if (!formData.id || !formData.name || !formData.description) {
+                showMessage('Please fill in all fields', 'error');
+                return;
+            }
+            
+            fetch('/api/add_phase', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(`✅ Phase ${formData.id} '${formData.name}' created successfully!`, 'success');
+                    clearForm('add-phase-form');
+                    // Refresh page after 2 seconds to show new phase
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showMessage(`❌ Error: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage(`❌ Network error: ${error}`, 'error');
+            });
+        });
+        
+        document.getElementById('edit-task-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const taskId = document.getElementById('edit-task-select').value;
+            if (!taskId) {
+                showMessage('No task selected', 'error');
+                return;
+            }
+            
+            const formData = {
+                id: taskId,
+                description: document.getElementById('edit-task-description').value,
+                output: document.getElementById('edit-task-output').value,
+                tests: document.getElementById('edit-task-tests').value,
+                context: collectFieldValues('edit-context-fields'),
+                depends_on: collectFieldValues('edit-dependency-fields'),
+                acceptance_criteria: collectFieldValues('edit-criteria-fields')
+            };
+            
+            fetch('/api/edit_task', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showMessage(`✅ Task '${taskId}' updated successfully!`, 'success');
+                    cancelEdit();
+                } else {
+                    showMessage(`❌ Error: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showMessage(`❌ Network error: ${error}`, 'error');
+            });
+        });
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html
+
+# NEW API ENDPOINTS for task/phase management
+
+@app.route('/api/add_task', methods=['POST'])
+@requires_auth
+def add_task():
+    """Add a new task via API"""
+    try:
+        data = request.json
+        
+        # Build CLI command
+        cmd_parts = [
+            "add-task",
+            f"--phase {data['phase']}",
+            f"--id \"{data['id']}\"",
+            f"--description \"{data['description']}\""
+        ]
+        
+        if data.get('output'):
+            cmd_parts.append(f"--output \"{data['output']}\"")
+        
+        if data.get('tests'):
+            cmd_parts.append(f"--tests \"{data['tests']}\"")
+        
+        if data.get('context') and any(data['context']):
+            context_items = [f'"{item}"' for item in data['context'] if item.strip()]
+            if context_items:
+                cmd_parts.append(f"--context {' '.join(context_items)}")
+        
+        if data.get('depends_on') and any(data['depends_on']):
+            dep_items = [f'"{item}"' for item in data['depends_on'] if item.strip()]
+            if dep_items:
+                cmd_parts.append(f"--depends-on {' '.join(dep_items)}")
+        
+        if data.get('acceptance_criteria') and any(data['acceptance_criteria']):
+            criteria_items = [f'"{item}"' for item in data['acceptance_criteria'] if item.strip()]
+            if criteria_items:
+                cmd_parts.append(f"--acceptance-criteria {' '.join(criteria_items)}")
+        
+        command = ' '.join(cmd_parts)
+        result = run_cli_command(command)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/add_phase', methods=['POST'])
+@requires_auth
+def add_phase():
+    """Add a new phase via API"""
+    try:
+        data = request.json
+        
+        command = f'add-phase --id {data["id"]} --name "{data["name"]}" --description "{data["description"]}"'
+        result = run_cli_command(command)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/api/edit_task', methods=['POST'])
+@requires_auth
+def edit_task():
+    """Edit an existing task via API"""
+    try:
+        data = request.json
+        
+        # Build CLI command
+        cmd_parts = [
+            "edit-task",
+            f"--id \"{data['id']}\""
+        ]
+        
+        if data.get('description'):
+            cmd_parts.append(f"--description \"{data['description']}\"")
+        
+        if data.get('output'):
+            cmd_parts.append(f"--output \"{data['output']}\"")
+        
+        if data.get('tests'):
+            cmd_parts.append(f"--tests \"{data['tests']}\"")
+        
+        if data.get('context') is not None:
+            context_items = [f'"{item}"' for item in data['context'] if item.strip()]
+            if context_items:
+                cmd_parts.append(f"--context {' '.join(context_items)}")
+            else:
+                cmd_parts.append("--context")  # Clear context
+        
+        if data.get('depends_on') is not None:
+            dep_items = [f'"{item}"' for item in data['depends_on'] if item.strip()]
+            if dep_items:
+                cmd_parts.append(f"--depends-on {' '.join(dep_items)}")
+            else:
+                cmd_parts.append("--depends-on")  # Clear dependencies
+        
+        if data.get('acceptance_criteria') is not None:
+            criteria_items = [f'"{item}"' for item in data['acceptance_criteria'] if item.strip()]
+            if criteria_items:
+                cmd_parts.append(f"--acceptance-criteria {' '.join(criteria_items)}")
+            else:
+                cmd_parts.append("--acceptance-criteria")  # Clear criteria
+        
+        command = ' '.join(cmd_parts)
+        result = run_cli_command(command)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+# EXISTING ROUTES (keeping all existing functionality)
 @app.route('/')
 @requires_auth
 def dashboard():
+    # [Keep existing dashboard implementation]
     tasks_data = task_manager.load_tasks()
     tasks = tasks_data.get("tasks", [])
     
@@ -507,6 +1224,7 @@ def dashboard():
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
                     <a href="/tasks" class="btn btn-primary">📋 Manage Tasks</a>
                     <a href="/phases" class="btn btn-info">📁 View Phases</a>
+                    <a href="/manage" class="btn btn-warning">⚙️ Add/Edit Tasks</a>
                     <a href="/generator" class="btn btn-success">🏗️ Blueprint Generator</a>
                     <a href="/reports" class="btn btn-warning">📈 Generate Reports</a>
                     <button onclick="location.reload()" class="btn btn-secondary">🔄 Refresh Dashboard</button>
@@ -1297,12 +2015,22 @@ def help_page():
                 
                 <h3 style="color: #ffd700; margin-top: 25px;">🎯 What's New</h3>
                 <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>Task/Phase Management:</strong> Add and edit tasks and phases through web UI</li>
                     <li><strong>Enhanced Context:</strong> Rich context with related tasks and architecture</li>
                     <li><strong>Blueprint Generator:</strong> Comprehensive technical documentation system</li>
                     <li><strong>Multi-Phase Support:</strong> Tasks organized by project phases</li>
                     <li><strong>Phase Progress Tracking:</strong> Visual progress bars for each phase</li>
                     <li><strong>Enhanced Dashboard:</strong> Phase overview with completion percentages</li>
                     <li><strong>Session Handoffs:</strong> Complete context preservation for Claude sessions</li>
+                </ul>
+                
+                <h3 style="color: #ffd700; margin-top: 25px;">⚙️ New Management Features</h3>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>Add Tasks:</strong> Create new tasks with full configuration via web interface</li>
+                    <li><strong>Add Phases:</strong> Create new project phases to organize work</li>
+                    <li><strong>Edit Tasks:</strong> Modify existing tasks including context, dependencies, and criteria</li>
+                    <li><strong>Dynamic Fields:</strong> Add/remove context files, dependencies, and acceptance criteria</li>
+                    <li><strong>Form Validation:</strong> Built-in validation ensures proper task creation</li>
                 </ul>
                 
                 <h3 style="color: #ffd700; margin-top: 25px;">✨ Enhanced Context Features</h3>
@@ -1325,6 +2053,7 @@ def help_page():
                 <h3 style="color: #ffd700; margin-top: 25px;">🔄 Enhanced Workflow</h3>
                 <ol style="margin-left: 20px; line-height: 2;">
                     <li><strong>Check Dashboard</strong> - See phase progress at a glance</li>
+                    <li><strong>Manage Tasks/Phases</strong> - Add new phases and tasks as needed</li>
                     <li><strong>View Phases</strong> - Detailed phase breakdown and statistics</li>
                     <li><strong>Start Task</strong> - Choose enhanced context for richer information</li>
                     <li><strong>Preview Context</strong> - See what will be generated before starting</li>
@@ -1337,9 +2066,18 @@ def help_page():
                     <li><strong>📊 Dashboard:</strong> Project overview and phase progress</li>
                     <li><strong>📋 Tasks:</strong> Phase-organized task management with enhanced context</li>
                     <li><strong>📁 Phases:</strong> Detailed phase tracking and progress</li>
+                    <li><strong>⚙️ Manage:</strong> Add/edit tasks and phases through web interface</li>
                     <li><strong>🏗️ Generator:</strong> Blueprint and handoff document creation</li>
                     <li><strong>📈 Reports:</strong> Quick task-specific Claude reports</li>
                     <li><strong>❓ Help:</strong> This user guide</li>
+                </ul>
+                
+                <h3 style="color: #ffd700; margin-top: 25px;">⚙️ Management Page Usage</h3>
+                <ul style="margin-left: 20px; line-height: 1.8;">
+                    <li><strong>Add Task:</strong> Create new tasks with phase, description, output, dependencies, etc.</li>
+                    <li><strong>Add Phase:</strong> Create new project phases to organize future work</li>
+                    <li><strong>Edit Task:</strong> Modify existing tasks including all properties and dynamic fields</li>
+                    <li><strong>Dynamic Fields:</strong> Add/remove context files, dependencies, and acceptance criteria as needed</li>
                 </ul>
                 
                 <h3 style="color: #ffd700; margin-top: 25px;">🏗️ Generator Page Usage</h3>
@@ -1358,6 +2096,15 @@ python3 cli/hdw-task.py start task-id
 # Start task with basic context
 python3 cli/hdw-task.py start task-id --basic
 
+# Add new task via CLI
+python3 cli/hdw-task.py add-task --phase 2 --id "new-task" --description "Task description"
+
+# Add new phase via CLI
+python3 cli/hdw-task.py add-phase --id 2 --name "Phase Name" --description "Phase description"
+
+# Edit existing task via CLI
+python3 cli/hdw-task.py edit-task --id "task-id" --description "New description"
+
 # List all tasks grouped by phase
 python3 cli/hdw-task.py list
 
@@ -1372,6 +2119,11 @@ python3 src/blueprint_generator.py update --phase-id 1
                     <h4 style="color: #ffd700;">🎯 Pro Tip: Enhanced Context</h4>
                     <p>The enhanced context feature automatically finds related tasks, shows where you're working in the system architecture, and includes relevant decisions from completed work. This creates perfect continuity between Claude sessions!</p>
                 </div>
+                
+                <div style="background: rgba(255, 215, 0, 0.1); border: 1px solid #ffd700; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                    <h4 style="color: #ffd700;">⚙️ Pro Tip: Management Interface</h4>
+                    <p>Use the Management page to quickly scaffold new phases and tasks for complex projects like trading bots. The web interface makes it easy to set up multiple tasks with proper dependencies and acceptance criteria.</p>
+                </div>
             </div>
         </div>
     </body>
@@ -1380,7 +2132,7 @@ python3 src/blueprint_generator.py update --phase-id 1
     
     return html
 
-# API Endpoints with Enhanced Context Support
+# EXISTING API ENDPOINTS (Enhanced Context Support)
 @app.route('/api/start_task', methods=['POST'])
 @requires_auth
 def start_task():
@@ -1626,21 +2378,19 @@ Next Steps: Continue with remaining Phase {task.get('phase', 0)} tasks or begin 
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "domain": "hdw.honey-duo.com", "version": "3.1-enhanced-context"})
+    return jsonify({"status": "healthy", "domain": "hdw.honey-duo.com", "version": "4.0-complete-management"})
 
 if __name__ == "__main__":
-    print("🌐 HDW Complete Management Interface - Enhanced Context Edition")
+    print("🌐 HDW Complete Management Interface - Enhanced with Dynamic Management")
     print("🔐 Access: https://hdw.honey-duo.com")
     print("🔑 Login: hdw / HoneyDuo2025!")
     print("")
     print("💡 New Features:")
+    print("  ⚙️ Manage - Add/edit tasks and phases via web UI")
     print("  ✨ Enhanced Context - Related tasks, architecture, decisions")
     print("  📁 Phases - Multi-phase project organization")
     print("  📊 Dashboard - Phase progress tracking")
-    print("  📋 Tasks - Grouped by phase with context preview")
     print("  🏗️ Generator - Blueprint and handoff document creation")
-    print("  📈 Reports - Claude handoff reports")
-    print("  ❓ Help - Updated user guide")
     print("")
-    print("🚀 Ready for enhanced context generation and blueprint creation!")
+    print("🚀 Ready for complete task/phase management!")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
