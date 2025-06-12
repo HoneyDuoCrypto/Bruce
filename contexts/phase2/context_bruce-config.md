@@ -1,18 +1,18 @@
-# Context for Task: bruce-branding
+# Context for Task: bruce-config
 
 **Phase:** 2 - Make Bruce Portable
-**Description:** Rebrand everything from HDW to Bruce
-**Expected Output:** All UI/CLI showing Bruce branding
+**Description:** Create bruce.yaml config system
+**Expected Output:** Config loader and bruce.yaml format
 
 
 ## Architecture Context: Where This Task Fits
 
-Current Task: bruce-branding
-Component: CLI Interface
+Current Task: bruce-config
+Component: Unknown Component
 
 System Overview:
 ┌─────────────────────┐     ┌─────────────────────┐
-│   CLI Interface     │ ← YOU ARE HERE     │   Web Dashboard     │
+│   CLI Interface     │     │   Web Dashboard     │
 │  (hdw-task.py)     │     │  (hdw_complete.py)  │
 └──────────┬──────────┘     └──────────┬──────────┘
            │                           │
@@ -38,6 +38,18 @@ Data Flow:
 3. Context System generates/reads context
 4. Work happens (YOU!)
 5. Blueprint Generator creates documentation
+
+## Related Completed Tasks
+
+These completed tasks might provide useful context:
+
+### bruce-branding: Rebrand everything from HDW to Bruce
+- **Output:** All UI/CLI showing Bruce branding
+- **Status:** completed
+
+### hello-world: Create a simple hello world function
+- **Output:** hello_world() function in src/utils.py
+- **Status:** completed
 
 ## Decision History
 

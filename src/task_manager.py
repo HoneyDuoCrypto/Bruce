@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced Task Manager with Multi-Phase Support and Enhanced Context
+Enhanced Task Manager with Multi-Phase Support, Enhanced Context, and Config System
 Save as: src/task_manager.py
 """
 
@@ -12,20 +12,67 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 from datetime import datetime
 import shutil
 import re
+import sys
+
+# Import config manager
+try:
+    from src.config_manager import ConfigManager
+except ImportError:
+    # Fallback if config manager not available
+    print("⚠️  Config manager not found, using hardcoded paths")
+    ConfigManager = None
 
 class TaskManager:
     def __init__(self, project_root: Optional[Path] = None):
         self.project_root = project_root or Path.cwd()
-        self.tasks_file = self.project_root / "tasks.yaml"  # Legacy support
-        self.phases_dir = self.project_root / "phases"
-        self.contexts_dir = self.project_root / "contexts"  # New organized location
-        self.docs_dir = self.project_root / "docs"
+        
+        # Load configuration
+        if ConfigManager:
+            self.config = ConfigManager(self.project_root)
+            
+            # Use config-driven paths
+            self.tasks_file = self.config.get_tasks_file()
+            self.phases_dir = self.config.get_phases_dir()
+            self.contexts_dir = self.config.get_contexts_dir()
+            self.docs_dir = self.config.get_blueprints_dir().parent  # docs/
+            self.reports_dir = self.config.get_reports_dir()
+            
+            # Validate configuration
+            if not self.config.validate_config():
+                print("⚠️  Config validation failed, but continuing")
+                
+            print(f"📋 Loaded config for: {self.config.project.name}")
+        else:
+            # Fallback to hardcoded paths
+            self.config = None
+            self.tasks_file = self.project_root / "tasks.yaml"
+            self.phases_dir = self.project_root / "phases"
+            self.contexts_dir = self.project_root / "contexts"
+            self.docs_dir = self.project_root / "docs"
+            self.reports_dir = self.project_root / "claude_reports"
+        
+        # Common paths
         self.src_dir = self.project_root / "src"
         self.tests_dir = self.project_root / "tests"
         
         # Create directories if they don't exist
         self.phases_dir.mkdir(exist_ok=True)
         self.contexts_dir.mkdir(exist_ok=True)
+        self.reports_dir.mkdir(exist_ok=True)
+        
+    def get_project_info(self):
+        """Get project information from config"""
+        if self.config:
+            return self.config.get_project_info()
+        else:
+            return {
+                'name': 'Bruce Project',
+                'description': 'AI-assisted project management',
+                'type': 'general',
+                'author': 'Bruce User',
+                'config_loaded': False,
+                'config_file': None
+            }
         
     def load_tasks(self) -> Dict[str, Any]:
         """Load tasks from tasks.yaml AND phases/*.yml files"""
@@ -43,7 +90,7 @@ class TaskManager:
                                 task["phase"] = 0
                         all_tasks["tasks"].extend(data["tasks"])
             except Exception as e:
-                print(f"Warning: Could not load tasks.yaml: {e}")
+                print(f"Warning: Could not load {self.tasks_file.name}: {e}")
         
         # Load phase files
         if self.phases_dir.exists():
@@ -68,7 +115,7 @@ class TaskManager:
                         # Store phase metadata
                         if "phases" not in all_tasks:
                             all_tasks["phases"] = {}
-                        all_tasks["phases"][phase_id] = {
+                        all_tasks["phases"][str(phase_id)] = {
                             "name": phase_name,
                             "description": phase_info.get("description", ""),
                             "file": phase_file.name,
@@ -233,7 +280,7 @@ class TaskManager:
                 score += overlap * 2
             
             # Check if current task depends on this one
-            if current_task.get("depends_on") and task_id in current_task.get("depends_on", []):
+            if current_task.get("depends_on") and task["id"] in current_task.get("depends_on", []):
                 score += 15
             
             # Check if they share dependencies
@@ -303,6 +350,9 @@ class TaskManager:
         if not task:
             return ""
         
+        # Get project name from config
+        project_name = self.get_project_info()['name']
+        
         # Determine which component this task affects
         task_desc = task.get("description", "").lower()
         task_output = task.get("output", "").lower()
@@ -317,12 +367,14 @@ class TaskManager:
             component = "Context System"
         elif any(term in combined_text for term in ["blueprint", "generator"]) and "context" not in combined_text:
             component = "Blueprint Generator"
-        elif any(term in combined_text for term in ["cli", "command", "hdw-task"]):
+        elif any(term in combined_text for term in ["cli", "command", "task.py"]):
             component = "CLI Interface"
-        elif any(term in combined_text for term in ["web", "ui", "dashboard", "hdw_complete"]):
+        elif any(term in combined_text for term in ["web", "ui", "dashboard", "complete.py"]):
             component = "Web Dashboard"
         elif any(term in combined_text for term in ["taskmanager", "task manager", "task_manager"]):
             component = "TaskManager Core"
+        elif any(term in combined_text for term in ["config", "bruce.yaml", "configuration"]):
+            component = "Configuration System"
         
         # Generate simple ASCII diagram
         diagram = f"""
@@ -330,6 +382,7 @@ class TaskManager:
 
 Current Task: {task_id}
 Component: {component}
+Project: {project_name}
 
 System Overview:
 ┌─────────────────────┐     ┌─────────────────────┐
@@ -345,20 +398,21 @@ System Overview:
          │  (task_manager.py)    │
          └───────────┬───────────┘
                      │
-        ┌────────────┴────────────┐
-        │                         │
-        ▼                         ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Context System  │{' ← YOU ARE HERE' if component == 'Context System' else ''}     │ Blueprint Gen   │{' ← YOU ARE HERE' if component == 'Blueprint Generator' else ''}
-│ (contexts/)     │     │ (blueprints/)   │
-└─────────────────┘     └─────────────────┘
+        ┌────────────┼────────────┐
+        │            │            │
+        ▼            ▼            ▼
+┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│ Config Sys  │ │Context Sys  │ │Blueprint Gen│{' ← YOU ARE HERE' if component == 'Blueprint Generator' else ''}
+│(config mgr) │{' ← YOU ARE HERE' if component == 'Configuration System' else ''} │(contexts/) │{' ← YOU ARE HERE' if component == 'Context System' else ''} │(blueprints)│
+└─────────────┘ └─────────────┘ └─────────────┘
 
 Data Flow:
 1. User triggers task via CLI/Web
-2. TaskManager processes request
-3. Context System generates/reads context
-4. Work happens (YOU!)
-5. Blueprint Generator creates documentation
+2. TaskManager processes request  
+3. Config System provides settings
+4. Context System generates/reads context
+5. Work happens (YOU!)
+6. Blueprint Generator creates documentation
 """
         
         # Add component-specific notes
@@ -377,11 +431,15 @@ Data Flow:
         if not task:
             return f"Task {task_id} not found"
         
+        # Get project info
+        project_info = self.get_project_info()
+        
         # Build enhanced context
         context_parts = []
         
         # 1. Basic task information
         context_parts.append(f"# Context for Task: {task_id}\n")
+        context_parts.append(f"**Project:** {project_info['name']}")
         context_parts.append(f"**Phase:** {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}")
         context_parts.append(f"**Description:** {task['description']}")
         context_parts.append(f"**Expected Output:** {task.get('output', 'Not specified')}\n")
@@ -395,12 +453,21 @@ Data Flow:
         if task.get('depends_on'):
             context_parts.append(f"**Dependencies:** {', '.join(task['depends_on'])}\n")
         
-        # 2. Architecture context
+        # 2. Configuration context
+        if self.config:
+            context_parts.append("## Project Configuration\n")
+            context_parts.append(f"- **Config loaded:** {'Yes' if project_info['config_loaded'] else 'No (using defaults)'}")
+            context_parts.append(f"- **Project type:** {project_info['type']}")
+            context_parts.append(f"- **Contexts directory:** {self.config.bruce.contexts_dir}")
+            context_parts.append(f"- **Blueprints directory:** {self.config.bruce.blueprints_dir}")
+            context_parts.append("")
+        
+        # 3. Architecture context
         arch_context = self.generate_architecture_context(task_id)
         if arch_context:
             context_parts.append(arch_context)
         
-        # 3. Related completed tasks
+        # 4. Related completed tasks
         related_tasks = self.find_related_tasks(task_id)
         if related_tasks:
             context_parts.append("## Related Completed Tasks\n")
@@ -420,7 +487,7 @@ Data Flow:
                 
                 context_parts.append("")
         
-        # 4. Decision history from phase
+        # 5. Decision history from phase
         context_parts.append("## Decision History\n")
         context_parts.append("Key decisions from this phase that may impact your work:\n")
         
@@ -443,7 +510,7 @@ Data Flow:
         
         context_parts.append("")
         
-        # 5. Original context files
+        # 6. Original context files
         context_parts.append("## Context Documentation:\n")
         if task.get("context"):
             context = self.get_context(task["context"])
@@ -467,7 +534,9 @@ Data Flow:
             print(f"❌ Task '{task_id}' not found")
             return
         
+        project_info = self.get_project_info()
         print(f"🚀 Starting task: {task_id}")
+        print(f"📁 Project: {project_info['name']}")
         if task.get("phase"):
             print(f"📁 Phase {task['phase']}: {task.get('phase_name', 'Unknown')}")
         print(f"📝 Description: {task['description']}")
@@ -495,6 +564,7 @@ Data Flow:
         else:
             # Original basic context
             context_content = f"# Context for Task: {task_id}\n\n"
+            context_content += f"**Project:** {project_info['name']}\n"
             context_content += f"**Phase:** {task.get('phase', 0)} - {task.get('phase_name', 'Legacy')}\n"
             context_content += f"**Description:** {task['description']}\n\n"
             context_content += f"**Expected Output:** {task.get('output', 'Not specified')}\n\n"
@@ -531,14 +601,18 @@ Data Flow:
         
         # Initialize phases
         for phase_id, phase_info in tasks_data.get("phases", {}).items():
-            phase_progress[phase_id] = {
-                "name": phase_info["name"],
-                "total": 0,
-                "completed": 0,
-                "in_progress": 0,
-                "pending": 0,
-                "blocked": 0
-            }
+            try:
+                phase_id_int = int(phase_id)
+                phase_progress[phase_id_int] = {
+                    "name": phase_info["name"],
+                    "total": 0,
+                    "completed": 0,
+                    "in_progress": 0,
+                    "pending": 0,
+                    "blocked": 0
+                }
+            except (ValueError, TypeError):
+                continue
         
         # Count tasks by phase and status
         for task in tasks_data.get("tasks", []):
@@ -555,8 +629,9 @@ Data Flow:
             
             phase_progress[phase]["total"] += 1
             status = task.get("status", "pending")
-            if status in phase_progress[phase]:
-                phase_progress[phase][status] += 1
+            status_key = status.replace('-', '_')  # Convert in-progress to in_progress
+            if status_key in phase_progress[phase]:
+                phase_progress[phase][status_key] += 1
         
         # Calculate percentages
         for phase_id, progress in phase_progress.items():
@@ -572,7 +647,7 @@ def main():
     """Maintain CLI compatibility with enhanced features"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="HDW Task Management CLI")
+    parser = argparse.ArgumentParser(description="Bruce Task Management CLI")
     parser.add_argument("--project-root", type=Path, help="Project root directory")
     
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -588,6 +663,6 @@ def main():
     # (Implementation continues with existing CLI structure...)
 
 if __name__ == "__main__":
-    print("This is the enhanced task manager library.")
+    print("This is the enhanced task manager library with config support.")
     print("Import and use the TaskManager class in your code.")
     print("Or update hdw-task.py to use this implementation.")

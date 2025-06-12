@@ -1,0 +1,19 @@
+# Bruce Project Configuration
+project:
+  name: "Honey Duo Wealth"
+  description: "AI-assisted project management system"
+  type: "project-management"
+  author: "Bruce User"
+
+bruce:
+  contexts_dir: "contexts"
+  blueprints_dir: "docs/blueprints"
+  phases_dir: "phases"
+  reports_dir: "claude_reports"
+  tasks_file: "tasks.yaml"
+
+ui:
+  title: "Honey Duo Wealth"
+  theme_color: "#00d4aa"
+  domain: "bruce.honey-duo.com"
+  port: 5000
