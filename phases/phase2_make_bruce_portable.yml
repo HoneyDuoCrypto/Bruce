@@ -25,8 +25,14 @@ tasks:
     note: 'Task committed: Complete task: bruce-config'
 - id: bruce-init
   description: Create 'bruce init' command
-  status: pending
+  status: completed
   output: Command that sets up Bruce in any directory
+  updated: '2025-06-11T18:04:18.687374'
+  notes:
+  - timestamp: '2025-06-11T17:40:50.805956'
+    note: Task started
+  - timestamp: '2025-06-11T18:04:18.687378'
+    note: 'Task committed: Complete task: bruce-init'
 - id: relative-paths
   description: Make all paths project-relative
   status: pending
